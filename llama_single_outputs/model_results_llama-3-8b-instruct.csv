@@ -1,0 +1,2 @@
+model,cev_auroc,iav_auroc,cev_accuracy,iav_accuracy,mean_accuracy,fused_val_auroc,halueval_cev_auroc_raw,halueval_cev_auroc,halueval_iav_auroc_raw,halueval_iav_auroc,halueval_mean_auroc_raw,halueval_mean_auroc,vanilla_mean_proxy,closedloop_mean_proxy,gpu_memory_gb,runtime_minutes
+llama-3-8b-instruct,0.8578993653640414,0.8622081730586129,0.789404839764552,0.7822105951602355,0.7822105951602355,0.8688847476170857,0.7403045899999999,0.7403045899999999,0.8160105649999999,0.8160105649999999,0.81390018,0.81390018,0.3321426234800044,0.18235303030569103,16.155221504,62.63035036325455
