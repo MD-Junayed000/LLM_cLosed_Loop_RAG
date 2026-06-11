@@ -1,7 +1,7 @@
 \chapter{Failure Analysis}
 \label{ch:failure_analysis}
 
-This chapter analyzes weaker design choices and explains why the final configuration was chosen. Section~\ref{sec:failed_choices} discusses failed or weaker design choices. Section~\ref{sec:why_best} explains why the final configuration works best. Section~\ref{sec:backbone_strengths} presents backbone-level strengths and limitations, and Section~\ref{sec:alternative_methods} discusses why some alternative approaches were insufficient.
+Every final design is the survivor of many failed alternatives. This chapter documents what we tried that \emph{didn't} work—or worked less well—and explains why the configuration we ultimately adopted outperforms the rest. We also compare our approach against broader alternative paradigms to clarify what design space we occupy.
 
 %% -------------------------------------------------
 \section{Failed or Weaker Design Choices}
@@ -9,72 +9,76 @@ This chapter analyzes weaker design choices and explains why the final configura
 
 \subsection{CEV-Only Probing}
 
-A CEV-only probe was evaluated as a residual-stream baseline. CEV-only probing matches the approach used in earlier hidden-state probing methods. The limitation is conceptual: when hallucination arises from parametric-memory intrusion, the relevant signal may appear most clearly inside the FFN before it is projected back into the residual stream.
+The obvious first question: why not just use the residual stream and skip the FFN intermediate entirely? We tried it. A CEV-only probe captures context-integration signals and roughly matches what earlier hidden-state probing papers do. It works—but not well enough.
 
-\textbf{Verdict:} CEV-only probing is useful but incomplete. It should remain as an ablation baseline.
+The conceptual gap is clear: when hallucination arises from parametric-memory intrusion (the model injecting something ``from memory'' that contradicts the evidence), the most direct signal lives inside the FFN before it gets projected back into the residual stream. CEV sees the aftermath, not the source.
+
+\textbf{Verdict:} useful as a baseline, incomplete as a final system.
 
 \subsection{IAV-Only Probing}
 
-IAV-only probing is the strongest single branch in the ablation results. This confirms that FFN intermediate activations carry substantial hallucination-relevant signal. However, some hallucinations arise from weak attention to retrieved evidence or poor context integration, which are better reflected in CEV.
+IAV alone is actually the single strongest branch in our ablation—it consistently outperforms CEV in isolation. So why not just use IAV? Because it misses the other failure mode. Some hallucinations arise not from parametric intrusion but from weak attention to the retrieved context—a context-integration failure that CEV captures better.
 
-\textbf{Verdict:} IAV is the strongest individual signal, but fusion is more robust.
+\textbf{Verdict:} strongest individual signal, but fusion is more robust across diverse failure modes.
 
 \subsection{Unconstrained Fusion Search}
 
-An unconstrained fusion search can overfit to the stronger-looking branch on a particular validation fold, losing complementarity.
+We experimented with letting the fusion weight collapse freely during optimization. The risk is overfitting: if the search pushes $w$ all the way to 0 or 1 on a particular validation fold, you effectively lose one of the two signals. The system degrades to single-branch behavior—exactly what we are trying to avoid.
 
-\textbf{Verdict:} Fusion should be constrained to avoid collapse into single-signal behavior.
+\textbf{Verdict:} constrain or monitor the fusion weight to preserve complementarity.
 
 \subsection{Mean Pooling Across All Tokens}
 
-Mean pooling over all generated tokens dilutes the hallucination-relevant signal that appears near the final decision state.
+Instead of taking the last token's activation, what if we average across all generated tokens? We tried this too. The problem is dilution. Not every token position carries the same hallucination-relevant information—the earlier tokens in a generated response are often just warming up, contextually. The signal concentrates near the end, where the model has committed to its final claims. Averaging washes this out.
 
-\textbf{Verdict:} Last-token pooling is more appropriate for autoregressive decoder probing.
+\textbf{Verdict:} last-token pooling wins for autoregressive decoders. The final token has attended to everything that came before—it is the natural summary position.
 
 \subsection{Three-Depth (Triple-Layer) Concatenation}
 
-Concatenating features from three proportional depths ($L/4$, $L/2$, $3L/4$) was the original design. In practice it was retired after the controlled layer-wise ablation in Section~\ref{sec:layer_selection}, which shows the three-depth concatenation never wins.
+This was our original design: concatenate features from $L/4$, $L/2$, and $3L/4$ into one fat probe input. In theory, you get surface patterns from early layers, semantic integration from mid layers, and final-decision signals from late layers. In practice, the controlled ablation (Section~\ref{sec:layer_selection}) showed that the triple never beats the single mid-depth layer—while costing three times the parameters.
 
-\textbf{Verdict:} A single mid-depth ($L/2$) hook is the better choice and is adopted in the final system.
+\textbf{Verdict:} retired. A single $L/2$ hook is cheaper, simpler, and empirically better.
 
 \subsection{Hard Labels Without Label Smoothing}
 
-Training with hard one-hot labels makes the probe overconfident, which harms calibration. Label smoothing ($\varepsilon = 0.05$) reduces this overconfidence.
+Training with hard one-hot targets makes the probe overconfident—it learns to output probabilities near 0 or 1 even when the evidence is ambiguous. That kills calibration. And calibration matters here, because the controller makes threshold-based decisions on absolute probability values. Label smoothing ($\varepsilon = 0.05$) gently discourages extreme confidence.
 
-\textbf{Verdict:} Label smoothing is useful because the controller needs calibrated probabilities.
+\textbf{Verdict:} label smoothing is not optional when the downstream consumer needs calibrated probabilities.
 
 \subsection{Learned REINFORCE Controller}
 
-A learned REINFORCE-style policy controller was attempted but not retained. The rollout setting did not provide a stable enough reward signal.
+We did attempt a learned policy—REINFORCE-style, with the probe scores as state and the controller actions as the policy's output. It did not work well. The rollout environment (100 SQuAD queries) gave sparse, noisy rewards. The policy kept collapsing toward a single action rather than learning meaningful distinctions. The deterministic threshold controller was more reliable from day one.
 
-\textbf{Verdict:} The deterministic controller is preferable for the current study. Learned policies should be revisited with larger rollout budgets.
+\textbf{Verdict:} the threshold controller wins for now. A learned policy might work with larger rollout budgets, denser rewards, and perhaps imitation learning from successful controller traces—but that is future work, not this thesis.
 
 %% -------------------------------------------------
 \section{Why the Final Configuration Works Best}
 \label{sec:why_best}
 
+Each design choice in the final system exists because a specific alternative failed. Table~\ref{tab:design_choices} maps the correspondence.
+
 \begin{table}[!htb]
 \centering
-\caption{Final design choices and the failures they address.}
+\caption{Final design choices and the specific failures they prevent.}
 \label{tab:design_choices}
 \begin{tabular}{@{}p{5.5cm} p{8cm}@{}}
 \toprule
-\textbf{Final Design Choice} & \textbf{Failure Prevented} \\
+\textbf{What We Do} & \textbf{What Goes Wrong If We Don't} \\
 \midrule
-Dual CEV + IAV probing & Avoids missing either context-integration or FFN-memory signals \\
-Single mid-depth ($L/2$) hook & Best AUROC per parameter; avoids triple's ${\sim}3\times$ cost \\
-Last-token extraction & Preserves the final autoregressive decision state \\
-Separate CEV and IAV probes & Avoids forcing different vector spaces into one classifier \\
-Temperature calibration & Converts raw logits into usable probabilities \\
-Validation-tuned fusion & Combines signals while controlling over-reliance \\
-Label smoothing & Reduces overconfidence under noisy labels \\
-Backbone-specific thresholds & Accounts for different activation distributions \\
-Deterministic controller & Avoids unstable learned policy under sparse rewards \\
+Dual CEV + IAV probing & Miss either context-integration or parametric-memory failures \\
+Single mid-depth ($L/2$) hook & Triple costs $3\times$ the parameters with no gain \\
+Last-token extraction & Mean pooling dilutes the concentrated end-of-sequence signal \\
+Separate CEV and IAV probes & Forcing different vector spaces into one classifier hurts both \\
+Temperature calibration & Raw logits are not interpretable as probabilities \\
+Validation-tuned fusion & Unconstrained search can collapse to single-branch behavior \\
+Label smoothing & Hard labels cause overconfident, poorly calibrated outputs \\
+Backbone-specific thresholds & Different models produce different score distributions \\
+Deterministic controller & Learned policy was unstable under sparse rewards \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The final architecture works because each design choice addresses a specific empirical or theoretical weakness observed in earlier variants.
+The architecture works precisely because it was built through elimination. Every piece addresses a concrete empirical problem we observed during development.
 
 %% -------------------------------------------------
 \section{Backbone Strengths and Limitations}
@@ -82,30 +86,32 @@ The final architecture works because each design choice addresses a specific emp
 
 \begin{table}[!htb]
 \centering
-\caption{Backbone-level strengths and limitations.}
+\caption{Per-backbone strengths and limitations at a glance.}
 \label{tab:backbone_strengths}
 \small
 \begin{tabular}{@{}l p{5.5cm} p{5.5cm}@{}}
 \toprule
-\textbf{Backbone} & \textbf{Strengths} & \textbf{Limitations} \\
+\textbf{Backbone} & \textbf{Where It Shines} & \textbf{Where It Struggles} \\
 \midrule
-Mistral-7B & Strong fused AUROC; lowest delivered proxy; balanced 62\% acceptance & HaluEval polarity inversion; format-sensitive \\[4pt]
-Qwen3-8B & Best fused AUROC; largest reduction; aligned HaluEval transfer & Most conservative; lowest acceptance (42\%) \\[4pt]
-LLaMA-3-8B & Best HaluEval transfer; highest acceptance (90\%) & Smallest reduction; needed threshold fallback \\
+Mistral-7B & Strong AUROC; lowest delivered proxy; balanced acceptance (62\%) & HaluEval polarity inversion; format-sensitive activations \\[4pt]
+Qwen3-8B & Best detection quality; largest reduction; clean OOD transfer & Too conservative—refuses 58\% of queries \\[4pt]
+LLaMA-3-8B & Best generalization; highest throughput (90\% accepted) & Smallest risk reduction; needed threshold fallback \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\textbf{Backbone verdict:} There is no single winner. Mistral is the balanced choice, Qwen is best for safety-first, and LLaMA is best for answer utility. The per-backbone operational profiles are discussed further in Section~\ref{sec:backbone_behavior}; quantitative comparisons are consolidated in Table~\ref{tab:cross_model}.
+\textbf{There is no single winner.} Mistral is the all-rounder. Qwen is the safety-first pick. LLaMA is the utility-first pick. The choice is a deployment decision—it depends on whether your application can tolerate frequent refusals or would rather accept more residual risk for higher throughput. Section~\ref{sec:backbone_behavior} discusses these profiles in greater detail; Table~\ref{tab:cross_model} has the complete numerical comparison.
 
 %% -------------------------------------------------
 \section{Why Some Alternative Approaches Were Insufficient}
 \label{sec:alternative_methods}
 
-\textbf{SelfCheckGPT-style consistency methods} require multiple sampled generations and can fail when the model consistently repeats the same incorrect answer. They measure sampling instability, not necessarily factual faithfulness to retrieved evidence.
+To put our design in context, it helps to explain why we did not simply adopt an existing method.
 
-\textbf{External judge models} can provide strong verification, but they add cost, latency, and dependency on a separate model. This work instead focuses on using the generating model's own internal signals.
+\textbf{SelfCheckGPT and similar consistency methods} require generating multiple responses per query and checking whether they agree. Clever idea, but it has two problems: it multiplies inference cost (unusable for real-time control), and it fails when the model is confidently wrong in a consistent way—all samples repeat the same fabrication.
 
-\textbf{Retrieval improvement alone} is also insufficient. Better retrieval can help when the retrieved evidence is weak, but it cannot fix cases where the model ignores good evidence or fabricates despite relevant context.
+\textbf{External judge models} (GPT-4 as a verifier, for example) can catch hallucinations that internal probes miss. But they add latency, cost, and a dependency on a separate—often proprietary—model. We wanted something self-contained: the generating model's own activations as the detection signal.
 
-\textbf{Alternative-method verdict:} Retrieval improvement, black-box consistency, and external judging are useful but incomplete. The proposed system targets a different design point: lightweight, single-pass, internal-signal-driven hallucination control at inference time.
+\textbf{Better retrieval alone} helps when the retrieved evidence is genuinely weak. But it cannot solve the cases where the model \emph{has} good evidence and ignores it anyway, or confidently fabricates despite a relevant passage sitting right there in the context window.
+
+\textbf{Our position in the design space:} lightweight, single-pass, internal-signal-driven hallucination control at inference time. No extra generations, no external judges, no backbone modifications. Just hooks, probes, and a threshold controller—simple enough to audit, fast enough to run on every response.

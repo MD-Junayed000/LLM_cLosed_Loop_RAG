@@ -1,18 +1,18 @@
 \chapter{System Architecture}
 \label{ch:system_architecture}
 
-This chapter describes the complete closed-loop RAG system architecture. Section~\ref{sec:pipeline_overview} provides a high-level overview. Section~\ref{sec:core_blocks} describes the core functional blocks. Section~\ref{sec:detailed_arch} presents the detailed architecture. Section~\ref{sec:feature_extraction} formalizes the internal-state feature extraction, including the layer-selection ablation (Section~\ref{sec:layer_selection}). Section~\ref{sec:probe_arch} describes the probe architecture. Section~\ref{sec:training_fusion_summary} summarizes training and fusion. Section~\ref{sec:controller_policy_ch5} presents the controller policy. Section~\ref{sec:example_trace_ch5} gives example traces, and Section~\ref{sec:fusion_diagram} describes the detailed probing diagram.
+This chapter puts all the pieces together. We have already established what signals we want (CEV and IAV) and why (Chapter~\ref{ch:background}). Now we describe how those signals fit into a working system—one that retrieves, generates, probes, decides, and sometimes retries. The chapter moves from a bird's-eye overview down through each functional block, the mathematical formalization of feature extraction, the probe architecture, and finally a pair of worked examples showing the controller in action.
 
 %% -------------------------------------------------
 \section{Overview of the Closed-Loop RAG Pipeline}
 \label{sec:pipeline_overview}
 
-Chapter~\ref{ch:background} defined the two internal activation signals used in this work: the \textbf{Contextualized Embedding Vector (CEV)} from the residual stream and the \textbf{Intermediate Activation Vector (IAV)} from the SwiGLU feed-forward sublayer. This section describes how these signals are integrated into a complete closed-loop RAG system.
+The high-level picture is straightforward (Figure~\ref{fig:system_overview}). A user query arrives. The retriever pulls relevant passages from a FAISS index. The frozen LLM backbone generates a candidate answer while forward hooks silently capture internal activations. Those activations are scored by two lightweight probes—one for CEV, one for IAV—and the resulting calibrated probabilities are fused into a single hallucination-risk estimate. Finally, a rule-based controller looks at that estimate together with a retrieval-quality score and decides what to do: deliver the answer, try again, fetch better evidence, or refuse politely.
 
 \begin{figure}[!htb]
     \centering
     \includegraphics[width=0.90\textwidth]{Images/overall_view_system_architecture.png}
-    \caption[High-level overview of the self-correcting closed-loop RAG system.]{High-level overview of the self-correcting closed-loop RAG system for hallucination mitigation. The pipeline: user query $\to$ retriever $\to$ LLM backbone with hooks $\to$ CEV/IAV probe $\to$ hallucination-risk score $\to$ controller $\to$ final output or intervention.}
+    \caption[High-level overview of the self-correcting closed-loop RAG system.]{High-level overview of the self-correcting closed-loop RAG system for hallucination mitigation. The pipeline flows from user query through retrieval, generation with hooks, probing, risk scoring, and controller decision.}
     \label{fig:system_overview}
 \end{figure}
 
@@ -20,61 +20,66 @@ Chapter~\ref{ch:background} defined the two internal activation signals used in 
 \section{Core Functional Blocks}
 \label{sec:core_blocks}
 
-The system consists of four main functional blocks.
+The system breaks down into four main blocks. Let us walk through each one.
 
 \subsection{Retrieval Engine}
 \label{subsec:retrieval_engine}
 
-The retrieval engine follows a standard dense-retrieval RAG design. Documents are encoded using the BAAI/bge-base-en-v1.5 embedding model~\cite{xiao2023bge}, producing 768-dimensional dense vectors. The document embeddings are indexed using FAISS~\cite{johnson2019faiss}. At inference time, the user query is encoded by the same embedding model, and the top-$k$ passages are retrieved.
+Nothing exotic here—we use a standard dense-retrieval setup. Documents are encoded with the BAAI/bge-base-en-v1.5 embedding model~\cite{xiao2023bge}, which produces 768-dimensional vectors. These get indexed using FAISS~\cite{johnson2019faiss}. At query time, the same embedding model encodes the user query, and we retrieve the top-$k$ most similar passages.
 
-The retrieval quality score is defined as the mean similarity between the query and the top-$k$ retrieved passages:
+We also compute a retrieval quality score—basically, how good a match did we get?
+
 \begin{equation}
     q_{\text{ret}} = \frac{1}{k} \sum_{i=1}^{k} \text{sim}(\mathbf{q},\, \mathbf{d}_i)
     \label{eq:qret}
 \end{equation}
-where $\mathbf{q}$ is the query embedding and $\mathbf{d}_i$ is the $i$-th retrieved passage embedding. This score is used as a proxy for answerability and retrieval relevance.
+
+\noindent This is the mean cosine similarity between the query embedding $\mathbf{q}$ and each retrieved passage embedding $\mathbf{d}_i$. The controller uses it later as a rough proxy for whether the retrieved evidence is actually relevant enough to answer the question.
 
 \subsection{LLM Backbone with Internal Hooks}
 \label{subsec:llm_backbone}
 
-The retrieved context and user query are passed to a frozen decoder-only LLM backbone. This work evaluates the same architecture across three backbones:
+The retrieved context and user query get assembled into a prompt and fed to a frozen decoder-only LLM. We test three backbones:
 \begin{itemize}
     \item Mistral-7B-Instruct-v0.2
     \item LLaMA-3-8B-Instruct
     \item Qwen3-8B
 \end{itemize}
 
-Forward hooks are registered at a single mid-depth decoder layer at approximately $L/2$. At that layer, the system captures $\mathbf{z}_{\text{CEV}}^{(\ell^*)}$ from the residual-stream output, and $\mathbf{z}_{\text{IAV}}^{(\ell^*)}$ from the SwiGLU FFN intermediate activation before $W_{\text{down}}$. Section~\ref{sec:layer_selection} reports the ablation that motivates this single-layer choice.
+``Frozen'' means we never touch the model weights—the backbone generates exactly as it normally would. The only addition is a forward hook registered at a single mid-depth layer (roughly $L/2$). That hook captures two things: the residual-stream output $\mathbf{z}_{\text{CEV}}^{(\ell^*)}$ and the SwiGLU intermediate $\mathbf{z}_{\text{IAV}}^{(\ell^*)}$. Why one layer rather than three? Section~\ref{sec:layer_selection} has the empirical answer.
 
 \subsection{Hallucination Detection Network}
 \label{subsec:detection_network}
 
-Two independent MLP probes are trained:
+Two small MLP probes operate independently:
 \begin{enumerate}
-    \item \textbf{CEV probe}: receives the CEV feature vector $\boldsymbol{\phi}(\mathbf{x})$.
-    \item \textbf{IAV probe}: receives the IAV feature vector $\boldsymbol{\psi}(\mathbf{x})$.
+    \item The \textbf{CEV probe} takes in the residual-stream feature vector $\boldsymbol{\phi}(\mathbf{x})$.
+    \item The \textbf{IAV probe} takes in the FFN-intermediate feature vector $\boldsymbol{\psi}(\mathbf{x})$.
 \end{enumerate}
 
-The probes output two hallucination probabilities:
+Each probe outputs a hallucination probability:
 \begin{align}
     p_{\text{CEV}} &= P(y = 1 \mid \boldsymbol{\phi}(\mathbf{x})) \label{eq:pcev}\\[4pt]
     p_{\text{IAV}} &= P(y = 1 \mid \boldsymbol{\psi}(\mathbf{x})) \label{eq:piav}
 \end{align}
-where $y = 1$ denotes hallucination. The two probabilities are fused using a validation-tuned convex combination:
+
+\noindent These are then combined through a validation-tuned convex combination—our central fusion equation:
+
 \begin{equation}
     \boxed{\;p_{\text{fused}} = w \cdot p_{\text{CEV}} + (1 - w) \cdot p_{\text{IAV}}\;}
     \label{eq:pfused}
 \end{equation}
-where $w$ is selected on the validation split. In these single-layer runs, the tuned weights are: $0.50/0.50$ for Mistral, $0.60/0.40$ (CEV-leaning) for Qwen, and $0.45/0.55$ (slightly IAV-leaning) for LLaMA---confirming that both signals contribute and neither dominates universally.
+
+The weight $w$ is chosen on the validation split to maximize AUROC. Interestingly, the optimal weights are not the same across models: Mistral lands at an even $0.50/0.50$ split, Qwen leans slightly toward CEV ($0.60/0.40$), and LLaMA tilts marginally toward IAV ($0.45/0.55$). The takeaway is that both signals contribute meaningful information regardless of backbone—neither one dominates universally.
 
 \subsection{Closed-Loop Policy Controller}
 \label{subsec:controller_overview}
 
-The controller consumes $p_{\text{fused}}$, the retrieval-quality score $q_{\text{ret}}$, and the retry count, and selects one of four actions. The full decision rule and thresholds are given in Section~\ref{sec:controller_logic}.
+The controller is the decision-maker. It takes $p_{\text{fused}}$, the retrieval-quality score $q_{\text{ret}}$, and the current retry count, and it picks one of four actions: accept, regenerate, re-retrieve, or abstain. The full decision logic is detailed in Chapter~\ref{ch:controller} (Section~\ref{sec:controller_logic}), but Table~\ref{tab:system_components} summarizes how all the components connect.
 
 \begin{table}[!htb]
 \centering
-\caption{Main system components.}
+\caption{Main system components and their roles.}
 \label{tab:system_components}
 \small
 \begin{tabularx}{\textwidth}{@{}l l X l l@{}}
@@ -96,12 +101,12 @@ Controller & $p_{\text{fused}}$, $q_{\text{ret}}$, retries & Rule-based policy &
 \section{Detailed Architecture}
 \label{sec:detailed_arch}
 
-Figure~\ref{fig:full_architecture} presents the complete closed-loop RAG architecture. The system retrieves external evidence, generates a candidate answer using a frozen LLM backbone with internal hooks, extracts CEV and IAV activation features, estimates hallucination risk through calibrated probes, and routes the response through the controller.
+Figure~\ref{fig:full_architecture} expands the pipeline into its full detail. The flow is: retrieve evidence $\to$ generate with a frozen backbone $\to$ capture CEV and IAV through hooks $\to$ score both with calibrated probes $\to$ fuse into $p_{\text{fused}}$ $\to$ route through the controller. If the controller says ``try again,'' the loop repeats with either fresh generation or fresh retrieval, up to a maximum retry budget.
 
 \begin{figure}[!htb]
     \centering
     \includegraphics[width=0.95\textwidth]{Images/Proposed_Closed-Loop_RAG_System.png}
-    \caption[Proposed closed-loop RAG architecture with internal-state probing.]{Proposed closed-loop RAG architecture with internal-state probing. The controller can accept, regenerate, re-retrieve, or abstain based on the fused hallucination-risk probability.}
+    \caption[Proposed closed-loop RAG architecture with internal-state probing.]{Proposed closed-loop RAG architecture with internal-state probing. The controller can accept the response, trigger regeneration, request new retrieval, or abstain—all based on the fused probe probability.}
     \label{fig:full_architecture}
 \end{figure}
 
@@ -109,33 +114,39 @@ Figure~\ref{fig:full_architecture} presents the complete closed-loop RAG archite
 \section{Internal-State Feature Extraction}
 \label{sec:feature_extraction}
 
-Let $L$ denote the total number of decoder layers. The system selects a single mid-depth hook layer:
+Now for the math. Let $L$ be the total layer count. We pick our hook layer at:
+
 \begin{equation}
     \ell^* = \lfloor L/2 \rfloor
     \label{eq:layer_selection}
 \end{equation}
 
-At the selected layer $\ell^*$, the CEV is extracted from the block output:
+\noindent At that layer, we extract the CEV directly from the block output:
+
 \begin{equation}
     \mathbf{z}_{\text{CEV}}^{(\ell^*)} = \mathbf{h}_{\text{out}}^{(\ell^*)}
     \label{eq:cev_extract}
 \end{equation}
 
-The IAV is extracted from the SwiGLU FFN intermediate activation:
+\noindent And the IAV from the gated SwiGLU intermediate:
+
 \begin{equation}
     \mathbf{z}_{\text{IAV}}^{(\ell^*)} = \text{SiLU}\bigl(W_{\text{gate}}^{(\ell^*)} \text{RMSNorm}(\mathbf{h}_{\ell^*})\bigr) \odot \bigl(W_{\text{up}}^{(\ell^*)} \text{RMSNorm}(\mathbf{h}_{\ell^*})\bigr)
     \label{eq:iav_extract}
 \end{equation}
 
-For autoregressive decoding, the \emph{final token} representation is used because it has attended to the full preceding context:
+Since we are working with autoregressive models, we use the \emph{last token's} representation—it is the only position that has attended to the complete preceding context and generated text:
+
 \begin{align}
     \boldsymbol{\phi}(\mathbf{x}) &= \mathbf{z}_{\text{CEV,last}}^{(\ell^*)} \label{eq:phi}\\[3pt]
     \boldsymbol{\psi}(\mathbf{x}) &= \mathbf{z}_{\text{IAV,last}}^{(\ell^*)} \label{eq:psi}
 \end{align}
 
+\noindent Table~\ref{tab:hook_layers} shows exactly which layer we hook for each backbone and what dimensions result.
+
 \begin{table}[!htb]
 \centering
-\caption{Hook layers and feature dimensions.}
+\caption{Hook layers and feature dimensions per backbone.}
 \label{tab:hook_layers}
 \begin{tabular}{@{}lcccccc@{}}
 \toprule
@@ -151,11 +162,13 @@ Qwen3-8B                  & 36 & 18 & 4096 & 12288 & 4096 & 12288 \\
 \subsection{Layer Selection: Why a Single Mid-Depth Hook}
 \label{sec:layer_selection}
 
-A design question precedes everything else in the probing pipeline: \emph{from which decoder depth should the CEV and IAV features be read, and is it worth concatenating several depths at all?} An earlier version of this system concatenated three proportional depths ($L/4$, $L/2$, $3L/4$) into one probe input. To decide whether that extra width earns its cost, each backbone was put through a controlled layer-wise ablation.
+Before settling on a single layer, we had to answer a fundamental design question: \emph{does concatenating features from multiple depths actually help, or does it just triple the probe size without meaningful gain?}
+
+An earlier version of the system fed features from three proportional depths—$L/4$, $L/2$, and $3L/4$—into the probe as a concatenated input. To test whether that extra width was earning its keep, we ran a controlled ablation across all three backbones. Table~\ref{tab:layer_ablation} tells the story.
 
 \begin{table}[!htb]
 \centering
-\caption{Layer-wise probe comparison (RAGTruth, 4{,}000 rows; fused AUROC is the mean over three seeds).}
+\caption{Layer-wise probe comparison (RAGTruth, 4{,}000 rows; fused AUROC averaged over three seeds).}
 \label{tab:layer_ablation}
 \small
 \begin{tabular}{@{}lcccccr@{}}
@@ -173,6 +186,10 @@ triple (all three)    & 3 & 14.22M & 0.8179          & 0.8427          & 0.8305 
 \end{tabular}
 \end{table}
 
+The pattern is clear. The single mid-depth layer wins or ties for the best AUROC on every backbone, and it does so with 4.79M parameters rather than 14.22M. The triple concatenation—which costs three times as much—actually performs \emph{worse} than mid alone on two of the three models. The early layer ($L/4$) is consistently the weakest, suggesting that the hallucination-relevant signal has not yet formed at quarter depth.
+
+Figures~\ref{fig:layerwise_single}--\ref{fig:layerwise_heatmap} visualize this comparison from multiple angles.
+
 \begin{figure}[!htb]
     \centering
     \includegraphics[width=0.85\textwidth]{Images/layerwise_single_layer_and_best_per_depth.png}
@@ -183,40 +200,42 @@ triple (all three)    & 3 & 14.22M & 0.8179          & 0.8427          & 0.8305 
 \begin{figure}[!htb]
     \centering
     \includegraphics[width=0.85\textwidth]{Images/layerwise_auroc_grouped_by_config.png}
-    \caption{Layer-wise probe AUROC by configuration and model.}
+    \caption{Layer-wise probe AUROC grouped by configuration and model.}
     \label{fig:layerwise_grouped}
 \end{figure}
 
 \begin{figure}[!htb]
     \centering
     \includegraphics[width=0.85\textwidth]{Images/layerwise_auroc_heatmap_and_params_scatter.png}
-    \caption{AUROC heatmap across configurations and AUROC-vs-probe-size scatter.}
+    \caption{AUROC heatmap across configurations and AUROC-vs-probe-size scatter plot.}
     \label{fig:layerwise_heatmap}
 \end{figure}
 
-\textbf{Decision.} The final system reads CEV and IAV from a single mid-depth layer at $L/2$---layer~16 for the 32-layer Mistral and LLaMA, and layer~18 for the 36-layer Qwen. The retired three-layer configuration is compared directly against this choice on training dynamics and out-of-domain transfer in Section~\ref{sec:triple_comparison}.
+\textbf{Our decision:} read CEV and IAV from a single mid-depth layer at $L/2$. That means layer~16 for the 32-layer Mistral and LLaMA, and layer~18 for the 36-layer Qwen. The three-layer configuration is officially retired—though we compare training dynamics and out-of-domain transfer against it one more time in Section~\ref{sec:triple_comparison}, just to be thorough.
 
 %% -------------------------------------------------
 \section{Probe Architecture and Calibration}
 \label{sec:probe_arch}
 
-Each hallucination probe is a lightweight two-hidden-layer MLP. Separate probes are used for CEV and IAV because the two feature types live in different vector spaces.
+Each hallucination probe is deliberately kept small—a two-hidden-layer MLP. We use separate probes for CEV and IAV because these features live in different vector spaces (4,096-dim vs. 12,288--14,336-dim) and represent fundamentally different computational signals.
 
-The probe architecture is:
+The architecture, written out as a pipeline:
 \[
     \text{Input} \to \text{Linear}(d, 256) \to \text{BN} \to \text{ReLU} \to \text{Dropout} \to \text{Linear}(256, 128) \to \text{BN} \to \text{ReLU} \to \text{Dropout} \to \text{Linear}(128, 2)
 \]
 
-The output logits are temperature-scaled before softmax calibration:
+After training, we apply temperature scaling to the output logits before computing the softmax:
+
 \begin{equation}
     P(y = 1) = \text{softmax}\!\left(\frac{\mathbf{z}}{T}\right)
     \label{eq:temp_scaling}
 \end{equation}
-where $T$ is selected on the validation split to minimize negative log-likelihood.
+
+\noindent The temperature $T$ is tuned on the validation split by minimizing negative log-likelihood. This calibration step is important because the controller needs well-calibrated probabilities, not just good rankings—it makes threshold-based decisions, so the absolute probability values matter.
 
 \begin{table}[!htb]
 \centering
-\caption{Probe architecture.}
+\caption{Probe architecture summary.}
 \label{tab:probe_architecture}
 \begin{tabular}{@{}ll@{}}
 \toprule
@@ -242,15 +261,15 @@ Output          & $P_{\text{hallucination}}$ \\
 \section{Training and Fusion Summary}
 \label{sec:training_fusion_summary}
 
-The probes are trained on labeled RAG hallucination examples using class-weighted cross-entropy loss with label smoothing. AdamW is used for optimization~\cite{loshchilov2019adamw,kingma2015adam}, and temperature scaling is applied for calibration~\cite{guo2017calibration}. The CEV and IAV probes are trained independently and fused after calibration using the validation-tuned convex combination of Eq.~\eqref{eq:pfused}.
+The probes are trained on labeled RAG hallucination examples (from RAGTruth) using class-weighted cross-entropy with label smoothing. We optimize with AdamW~\cite{loshchilov2019adamw,kingma2015adam} and apply temperature scaling for post-training calibration~\cite{guo2017calibration}. The two probes are trained independently—they never see each other's features—and fused only after calibration via Eq.~\eqref{eq:pfused}.
 
-The complete training and fusion settings are consolidated in Table~\ref{tab:training_config} (Section~\ref{sec:training_protocol}).
+Full training details (optimizer settings, learning rates, early stopping, etc.) are consolidated in Table~\ref{tab:training_config} in Section~\ref{sec:training_protocol}.
 
 %% -------------------------------------------------
 \section{Controller Policy}
 \label{sec:controller_policy_ch5}
 
-The controller selects one of four actions; the full decision rule and thresholds are given in Section~\ref{sec:controller_logic}.
+The controller picks one of four actions based on the fused score, retrieval quality, and retry count. We defer the full decision rule to Section~\ref{sec:controller_logic} in Chapter~\ref{ch:controller}, but the per-backbone thresholds are summarized here for reference.
 
 \begin{table}[!htb]
 \centering
@@ -274,7 +293,7 @@ Degeneration guard & 4-gram rep.\ ratio & 4-gram rep.\ ratio & 4-gram rep.\ rati
 \section{Example Closed-Loop Trace}
 \label{sec:example_trace_ch5}
 
-The following examples illustrate how the system routes a query. The numbers are illustrative and explain the control logic.
+To make the system concrete, here are two worked examples showing what happens end-to-end. The numbers are illustrative—they show the kind of computation the controller performs, not exact logged values.
 
 \begin{groundedbox}[Example A: Grounded Response $\to$ ACCEPT]
 \begin{tabular}{@{}r@{\hspace{8pt}}p{10.5cm}@{}}
@@ -284,14 +303,17 @@ The following examples illustrate how the system routes a query. The numbers are
 \textbf{$q_{\text{ret}}$} & 0.72 \\[2pt]
 \textbf{$p_{\text{CEV}}$} & 0.24 \quad\quad \textbf{$p_{\text{IAV}}$} = 0.28 \\[2pt]
 \textbf{$p_{\text{fused}}$} & 0.27 $<$ $\theta_{\text{hallu}}$ = 0.62 \\[3pt]
-\textbf{Decision}   & \textcolor{acceptgreen}{\textbf{ACCEPT}} --- Response is delivered \\
+\textbf{Decision}   & \textcolor{acceptgreen}{\textbf{ACCEPT}} --- Response delivered to user \\
 \end{tabular}
 \end{groundedbox}
+
+\vspace{0.3em}
+\noindent Both probes agree the response is low-risk. The fused score sits well below the intervention threshold. The controller accepts without hesitation.
 
 \begin{hallucinatedbox}[Example B: Unsupported Response $\to$ ABSTAIN]
 \begin{tabular}{@{}r@{\hspace{8pt}}p{10.5cm}@{}}
 \textbf{Query}      & ``What is the official 2024 census population of Atlantis?'' \\[3pt]
-\textbf{Retrieved}  & Passage discusses South Atlantic territories (no Atlantis verification) \\[3pt]
+\textbf{Retrieved}  & Passage discusses South Atlantic territories (no mention of Atlantis) \\[3pt]
 \textbf{Response}   & ``According to the 2024 census, Atlantis had a population of 140,634.'' \\[3pt]
 \textbf{$q_{\text{ret}}$} & 0.26 \\[2pt]
 \textbf{$p_{\text{CEV}}$} & 0.71 \quad\quad \textbf{$p_{\text{IAV}}$} = 0.84 \\[2pt]
@@ -300,19 +322,22 @@ The following examples illustrate how the system routes a query. The numbers are
 \end{tabular}
 \end{hallucinatedbox}
 
+\vspace{0.3em}
+\noindent Here both probes fire strongly—the CEV shows poor context coherence, and the IAV shows confabulation patterns. The fused score exceeds the abstention threshold, so the system refuses rather than delivering a fabricated number.
+
 %% -------------------------------------------------
 \section{Detailed Probing and Probability-Level Fusion Diagram}
 \label{sec:fusion_diagram}
 
-Figure~\ref{fig:detailed_methodology} provides a detailed view of how internal-state probing, probe training, temperature calibration, and probability-level fusion are performed.
+Figure~\ref{fig:detailed_methodology} zooms into the probing and fusion machinery. It is divided into two panels.
 
-\textbf{Panel~A} shows how CEV and IAV features are extracted from the LLM using internal hooks at a single mid-depth layer, last-token pooled, and z-score normalized into separate feature vectors.
+\textbf{Panel~A} shows the extraction side: hooks capture CEV and IAV at the selected mid-depth layer, the last-token activation is pooled, and the raw features are z-score normalized into the probe input vectors.
 
-\textbf{Panel~B} shows how the extracted feature vectors are passed through independent probes, calibrated using temperature scaling, fused into a single hallucination-risk score ($p_{\text{fused}}$), and sent to the closed-loop controller.
+\textbf{Panel~B} shows the scoring side: each probe produces logits, those logits are temperature-scaled into calibrated probabilities, the two probabilities are fused into $p_{\text{fused}}$, and that score is handed off to the controller.
 
 \begin{figure}[!htb]
     \centering
     \includegraphics[width=0.95\textwidth]{Images/Detailed_Methodology.png}
-    \caption[Detailed methodology for internal-state probing, temperature calibration, and probability-level fusion.]{Detailed methodology for internal-state probing, temperature calibration, and probability-level fusion. Panel~A: activation extraction. Panel~B: probe training, calibration, fusion, and controller input.}
+    \caption[Detailed methodology for internal-state probing, calibration, and fusion.]{Detailed methodology for internal-state probing, temperature calibration, and probability-level fusion. Panel~A covers activation extraction; Panel~B covers probe scoring, calibration, fusion, and controller handoff.}
     \label{fig:detailed_methodology}
 \end{figure}

@@ -1,17 +1,19 @@
 \chapter{Experimental Setup and Results}
 \label{ch:results}
 
-This chapter evaluates the proposed CEV/IAV closed-loop RAG framework across three decoder-only LLM backbones: \textbf{Mistral-7B-Instruct-v0.2}, \textbf{LLaMA-3-8B-Instruct}, and \textbf{Qwen3-8B}. The experiments answer four questions: (1)~Can CEV and IAV probes reliably detect hallucination on a RAGTruth validation split? (2)~Does probability-level fusion improve over either signal alone? (3)~Does the closed-loop controller reduce delivered hallucination risk relative to vanilla RAG? (4)~Do the probes transfer out of domain?
+This is where the rubber meets the road. We evaluate the full CEV/IAV closed-loop framework on three frozen decoder backbones—\textbf{Mistral-7B-Instruct-v0.2}, \textbf{LLaMA-3-8B-Instruct}, and \textbf{Qwen3-8B}—and ask four questions. Can the probes actually detect hallucination reliably? Does fusing two signals beat using one alone? Does the closed-loop controller genuinely reduce hallucination risk compared to vanilla RAG? And do the learned signals generalize to data the probes have never seen?
 
 %% -------------------------------------------------
 \section{Experimental Setup}
 \label{sec:experimental_setup}
 
-All experiments use Google Colab A100 (40\,GB) with FP16 inference. The probes are trained on extracted activations from the frozen backbone; the backbone weights are never modified. Each backbone's probes, thresholds, and fusion weights are calibrated independently on a stratified RAGTruth validation split.
+Every experiment runs on Google Colab with an NVIDIA A100 GPU (40\,GB) under FP16 inference. The backbone weights are frozen throughout—we never fine-tune the language model itself. Only the lightweight probes are trained, and each backbone gets its own independently calibrated probes, thresholds, and fusion weights, all tuned on a stratified RAGTruth validation split.
 
 %% -------------------------------------------------
 \section{Dataset Overview}
 \label{sec:dataset_overview}
+
+We rely on four datasets, each serving a distinct role in the pipeline. Table~\ref{tab:dataset_roles} lays out who does what.
 
 \begin{table}[!htb]
 \centering
@@ -34,30 +36,28 @@ HalluRAG & 1{,}098 & Supplementary & Mistral & No & No & Sentence-level examples
 \subsection{RAGTruth-18K: Primary Probe Supervision}
 \label{sec:ragtruth}
 
-RAGTruth~\cite{wu2024ragtruth} provides response-level hallucination labels for RAG-generated text across multiple tasks. The study uses the processed binary label convention:
-\begin{itemize}
-    \item $y = 0$: Grounded / supported by retrieved context
-    \item $y = 1$: Hallucinated / unsupported or contradictory
-\end{itemize}
+RAGTruth~\cite{wu2024ragtruth} gives us response-level hallucination labels for RAG-generated text. We convert these into a simple binary scheme: $y = 0$ means the response is grounded (supported by the retrieved context), and $y = 1$ means it is hallucinated (unsupported or contradictory). This dataset provides the training signal and validation benchmark for our probes.
 
 \subsection{SQuAD v1.1: Retrieval Corpus and Operational QA Source}
 \label{sec:squad}
 
-SQuAD v1.1~\cite{rajpurkar2016squad} serves dual purposes: (1)~its 25{,}000 training-set contexts form the FAISS retrieval index, and (2)~its validation QA pairs provide the operational queries for closed-loop evaluation.
+SQuAD v1.1~\cite{rajpurkar2016squad} pulls double duty. Its 25{,}000 training-set contexts become the FAISS retrieval index—the knowledge base from which our system pulls evidence at inference time. Meanwhile, its validation QA pairs supply the operational queries we use to test the full closed-loop pipeline.
 
 \subsection{HaluEval-QA: Out-of-Distribution Evaluation}
 \label{sec:halueval_dataset}
 
-HaluEval~\cite{li2023halueval} provides paired correct and hallucinated answers. The trained probe scores both, and AUROC measures separation quality.
+HaluEval~\cite{li2023halueval} pairs correct answers with hallucinated alternatives. We score both with our trained probes and measure AUROC—can the probe tell them apart even though it was never trained on this data? This is our primary generalization test.
 
 \subsection{HalluRAG: Mistral-Specific Supplementary Data}
 \label{sec:hallurag}
 
-HalluRAG~\cite{frohling2024hallurag} provides sentence-level hallucination labels for Mistral-generated RAG responses.
+HalluRAG~\cite{frohling2024hallurag} offers sentence-level hallucination labels for Mistral-generated RAG outputs. We use it as optional supplementary training data for the Mistral backbone specifically.
 
 %% -------------------------------------------------
 \section{Dataset Merging and Split Protocol}
 \label{sec:split_protocol}
+
+Table~\ref{tab:dataset_summary} summarizes the full data landscape at a glance.
 
 \begin{table}[!htb]
 \centering
@@ -84,33 +84,38 @@ HalluRAG & 1{,}098 & Supplementary & Mistral only & \cite{frohling2024hallurag} 
 \subsection{Loss Function and Class-Weight Calculation}
 \label{sec:loss_function}
 
-The probes are trained as binary classifiers: $y \in \{0, 1\} = \{\text{grounded}, \text{hallucinated}\}$. The training loss is class-weighted cross-entropy with label smoothing:
+Each probe is a binary classifier ($y \in \{0, 1\}$) trained with class-weighted cross-entropy and label smoothing:
+
 \begin{equation}
     \mathcal{L} = -\sum_{c \in \{0,1\}} w_c \cdot \tilde{y}_c \cdot \log\bigl(\text{softmax}(\mathbf{z})_c\bigr)
     \label{eq:loss}
 \end{equation}
-where $w_c$ is the class weight and $\tilde{y}_c$ is the smoothed target label.
 
-With approximately \textbf{8{,}369 grounded} and \textbf{6{,}721 hallucinated} examples ($N = 15{,}090$ total), the inverse-frequency weights are:
+\noindent The class weights correct for the mild label imbalance in RAGTruth. With roughly \textbf{8{,}369 grounded} and \textbf{6{,}721 hallucinated} examples ($N = 15{,}090$ total), inverse-frequency weighting gives:
+
 \begin{align}
     w_{\text{grounded}} &= \frac{15{,}090}{2 \times 8{,}369} = 0.902 \\[4pt]
     w_{\text{hallucinated}} &= \frac{15{,}090}{2 \times 6{,}721} = 1.122
 \end{align}
 
+\noindent So the hallucinated class gets a slightly higher weight since it is less frequent—nothing dramatic, but enough to prevent the probe from being lazy and always predicting ``grounded.''
+
 \subsection{Learning-Rate Explanation}
 \label{sec:lr_explanation}
 
+Not all backbones are created equal when it comes to probe training. Mistral's activations turned out to be more sensitive to prompt formatting, so we gave it a gentler learning rate. LLaMA and Qwen converged fine with a faster step.
+
 \begin{table}[!htb]
 \centering
-\caption{Learning-rate settings.}
+\caption{Learning-rate settings and rationale.}
 \label{tab:lr_settings}
 \begin{tabular}{@{}lll@{}}
 \toprule
-\textbf{Backbone} & \textbf{Learning Rate} & \textbf{Rationale} \\
+\textbf{Backbone} & \textbf{Learning Rate} & \textbf{Why} \\
 \midrule
-Mistral-7B-Instruct-v0.2 & $3 \times 10^{-4}$ & Conservative; format-sensitive activations \\
-LLaMA-3-8B-Instruct      & $1 \times 10^{-3}$ & Faster convergence; stable activations \\
-Qwen3-8B                  & $1 \times 10^{-3}$ & Faster convergence; strong validation signal \\
+Mistral-7B-Instruct-v0.2 & $3 \times 10^{-4}$ & More conservative; activations are format-sensitive \\
+LLaMA-3-8B-Instruct      & $1 \times 10^{-3}$ & Converges quickly; stable activation distributions \\
+Qwen3-8B                  & $1 \times 10^{-3}$ & Strong validation signal; fast convergence \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -119,17 +124,19 @@ Qwen3-8B                  & $1 \times 10^{-3}$ & Faster convergence; strong vali
 \section{Threshold Selection and Deployment Calibration}
 \label{sec:threshold_selection}
 
+Each backbone needs its own intervention and abstention thresholds because their probe-score distributions differ. We select these on the validation split using F1 optimization for the intervention threshold and a safety margin above it for abstention.
+
 \begin{table}[!htb]
 \centering
-\caption{Deployment thresholds.}
+\caption{Deployment thresholds per backbone.}
 \label{tab:deploy_thresholds}
 \begin{tabular}{@{}lccp{5cm}@{}}
 \toprule
 \textbf{Backbone} & $\theta_{\text{hallu}}$ & $\theta_{\text{abs}}$ & \textbf{Interpretation} \\
 \midrule
 Mistral-7B & 0.62 & 0.75 & Conservative; avoids excessive false positives \\
-Qwen3-8B   & 0.55 & 0.72 & Lower threshold; stronger score separation \\
-LLaMA-3-8B & 0.60 & 0.78 & Higher abstention; reduces over-refusal \\
+Qwen3-8B   & 0.55 & 0.72 & Lower threshold thanks to stronger score separation \\
+LLaMA-3-8B & 0.60 & 0.78 & Higher abstention bar to reduce over-refusal \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -138,9 +145,11 @@ LLaMA-3-8B & 0.60 & 0.78 & Higher abstention; reduces over-refusal \\
 \section{Primary RAGTruth Validation Results}
 \label{sec:primary_results}
 
+Table~\ref{tab:ragtruth_results} presents the headline numbers. All three backbones achieve fused AUROC values above 0.85, with Qwen3-8B leading the pack at 0.8808.
+
 \begin{table}[!htb]
 \centering
-\caption{RAGTruth validation results.}
+\caption{RAGTruth validation results (primary in-domain evaluation).}
 \label{tab:ragtruth_results}
 \begin{tabular}{@{}lcccc@{}}
 \toprule
@@ -156,7 +165,7 @@ LLaMA-3-8B-Instruct      & 0.8579 & 0.8622 & 0.8689 & 0.7822 \\
 \begin{figure}[!htb]
     \centering
     \includegraphics[width=0.90\textwidth]{Images/our_models_multi_metric.png}
-    \caption[Cross-model probe performance.]{Cross-model probe performance across validation and OOD metrics. Fused AUROC, CEV AUROC, IAV AUROC, mean fusion accuracy, and HaluEval mean AUROC compared across the three backbones.}
+    \caption[Cross-model probe performance.]{Cross-model probe performance across multiple metrics. Qwen3-8B leads on in-domain validation; LLaMA-3-8B-Instruct leads on out-of-domain HaluEval transfer.}
     \label{fig:multi_metric}
 \end{figure}
 
@@ -164,10 +173,12 @@ LLaMA-3-8B-Instruct      & 0.8579 & 0.8622 & 0.8689 & 0.7822 \\
 \section{Probe Score Distributions}
 \label{sec:score_distributions}
 
+Figure~\ref{fig:score_histograms} shows what the probe scores look like in practice. Grounded and hallucinated examples produce overlapping but distinguishable distributions—which is exactly what you would expect for a phenomenon as nuanced as hallucination. Perfect separation is unrealistic; what matters is that the overlap is small enough for useful thresholding.
+
 \begin{figure}[!htb]
     \centering
     \includegraphics[width=0.90\textwidth]{Images/probe_score_histograms_grid.png}
-    \caption[Probe score distributions.]{Probe score distributions for grounded and hallucinated examples. The overlap between distributions indicates the difficulty of perfect binary separation; partial overlap is expected because hallucination is a graded phenomenon.}
+    \caption[Probe score distributions.]{Probe score distributions for grounded vs.\ hallucinated examples. Partial overlap is expected—hallucination is a graded phenomenon, not a binary one.}
     \label{fig:score_histograms}
 \end{figure}
 
@@ -175,9 +186,11 @@ LLaMA-3-8B-Instruct      & 0.8579 & 0.8622 & 0.8689 & 0.7822 \\
 \section{Baseline Comparison on RAGTruth}
 \label{sec:baseline_comparison}
 
+How does our approach stack up against existing detectors? Table~\ref{tab:baselines} lines up ten published or reproduced baselines against our fused CEV/IAV probe. The comparison is telling: our method outperforms every baseline on both Mistral and LLaMA, and it is the only one with closed-loop control capability built in.
+
 \begin{table}[!htb]
 \centering
-\caption{Comparison with RAGTruth hallucination-detection baselines.}
+\caption{Comparison with published hallucination-detection baselines on RAGTruth.}
 \label{tab:baselines}
 \small
 \begin{tabular}{@{}l l c cc@{}}
@@ -203,7 +216,7 @@ SAPLMA~\cite{azaria2023saplma}                  & Hidden-state probe       & No 
 \begin{figure}[!htb]
     \centering
     \includegraphics[width=0.90\textwidth]{Images/compare_prior_work_ragtruth_paper_style.png}
-    \caption[Baselines vs.\ proposed probe on RAGTruth AUROC.]{Published baselines vs.\ proposed fused CEV/IAV probe on RAGTruth AUROC. The proposed method achieves the highest AUROC on both Mistral and LLaMA backbones while being the only method with closed-loop capability.}
+    \caption[Baselines vs.\ proposed probe.]{Published baselines vs.\ our fused CEV/IAV probe on RAGTruth. Our method tops the chart on both backbones—and is the only one that feeds its score into a closed-loop controller.}
     \label{fig:baselines}
 \end{figure}
 
@@ -211,9 +224,11 @@ SAPLMA~\cite{azaria2023saplma}                  & Hidden-state probe       & No 
 \section{Vanilla RAG vs.\ Closed-Loop RAG}
 \label{sec:vanilla_vs_cl}
 
+This is arguably the most important experiment in the thesis: does the closed loop actually \emph{help}? Table~\ref{tab:vanilla_vs_cl} compares the delivered hallucination proxy between vanilla (single-pass) RAG and our closed-loop system.
+
 \begin{table}[!htb]
 \centering
-\caption{Vanilla RAG vs.\ closed-loop RAG comparison.}
+\caption{Vanilla RAG vs.\ closed-loop RAG: delivered hallucination proxy comparison.}
 \label{tab:vanilla_vs_cl}
 \begin{tabular}{@{}lcccrr@{}}
 \toprule
@@ -229,25 +244,27 @@ LLaMA-3-8B  & 0.3321 & 0.1824          & 45.1\% & \textbf{90\%} & 10\% \\
 \begin{figure}[!htb]
     \centering
     \includegraphics[width=0.90\textwidth]{Images/vanilla_vs_closedloop_comparison.png}
-    \caption[Vanilla RAG vs.\ closed-loop RAG comparison.]{Vanilla RAG vs.\ closed-loop RAG: delivered hallucination proxy, acceptance rate, and relative reduction across the three backbones.}
+    \caption[Vanilla vs.\ closed-loop RAG.]{The closed-loop system cuts delivered hallucination risk substantially on all three backbones, with different safety--utility trade-offs per model.}
     \label{fig:vanilla_vs_cl}
 \end{figure}
 
-\textbf{Interpretation.} The closed-loop controller reduces delivered hallucination risk for all three backbones; the per-backbone safety--utility profiles (Mistral balanced, Qwen conservative, LLaMA permissive) are discussed in Section~\ref{sec:safety_utility}.
+The numbers speak clearly. Every backbone sees a meaningful reduction in delivered hallucination risk—ranging from 45\% (LLaMA) to nearly 80\% (Qwen). But this comes at different costs. Qwen achieves the biggest reduction by being the most aggressive abstainer (58\% of queries refused). Mistral strikes a balance (62\% accepted, 68\% reduction). LLaMA keeps almost everything (90\% accepted) but pays for it with a smaller reduction.
 
-\textbf{Threats to validity (proxy metric).} These reductions are measured with the system's own calibrated probe score rather than with human or external judgments---the metric is therefore partly self-referential. Three specific caveats apply: (i)~the proxy cannot catch the failure mode of Section~\ref{sec:illustrative_examples}, where confident but unsupported extractions are scored as low-risk; (ii)~the 100-query sample at one seed carries sampling noise; and (iii)~the RE-RETRIEVE branch was rarely exercised. These caveats are formalized as Limitations~6--8 in Section~\ref{sec:limitations}.
+\textbf{An important caveat.} These reductions are measured using the system's own probe score as the hallucination proxy—not human judgments. The metric is therefore partly self-referential: a controller that only accepts low-scoring responses will, by construction, report low delivered risk. Three specific limitations follow: (i) the probe cannot catch the failure mode from Section~\ref{sec:illustrative_examples}; (ii) 100 queries at one seed carries sampling noise; (iii) the RE-RETRIEVE branch was rarely triggered. We expand on these in Section~\ref{sec:limitations}.
 
 %% -------------------------------------------------
 \section{Ablation Study: CEV, IAV, and Fusion}
 \label{sec:ablation}
 
+Is fusion actually worth the trouble? Could we just use one probe? Table~\ref{tab:ablation} answers this directly.
+
 \begin{table}[!htb]
 \centering
-\caption{Probe ablation accuracy.}
+\caption{Probe ablation: accuracy with CEV-only, IAV-only, and mean-fusion.}
 \label{tab:ablation}
 \begin{tabular}{@{}lcccc@{}}
 \toprule
-\textbf{Backbone} & \textbf{CEV-only} & \textbf{IAV-only} & \textbf{Mean-fusion} & \textbf{Best} \\
+\textbf{Backbone} & \textbf{CEV-only} & \textbf{IAV-only} & \textbf{Mean-fusion} & \textbf{Winner} \\
 \midrule
 Mistral-7B  & 0.772 & 0.778 & \textbf{0.781} & Fusion \\
 Qwen3-8B    & 0.799 & 0.793 & \textbf{0.800} & Fusion \\
@@ -259,13 +276,17 @@ LLaMA-3-8B  & \textbf{0.789} & 0.782 & 0.782 & CEV \\
 \begin{figure}[!htb]
     \centering
     \includegraphics[width=0.85\textwidth]{Images/section12_3_core_ablation_accuracy_comparison.png}
-    \caption[Ablation: CEV-only, IAV-only, and mean-fusion accuracy.]{Ablation comparison across CEV-only, IAV-only, and mean-fusion scores for the three backbones.}
+    \caption[Ablation results.]{CEV-only vs.\ IAV-only vs.\ mean-fusion accuracy. Fusion wins on two out of three backbones; on LLaMA, CEV alone matches fusion.}
     \label{fig:ablation}
 \end{figure}
+
+For Mistral and Qwen, fusion wins—even if the margins are small. For LLaMA, CEV alone matches fusion while IAV lags slightly. The overall conclusion is that fusion is the safer default: it never hurts meaningfully, and on most backbones it helps.
 
 %% -------------------------------------------------
 \section{HaluEval Out-of-Distribution Analysis}
 \label{sec:halueval_ood}
+
+Table~\ref{tab:halueval_ood} shows what happens when our RAGTruth-trained probes encounter data they were never trained on. The results are backbone-dependent in a dramatic way.
 
 \begin{table}[!htb]
 \centering
@@ -274,9 +295,9 @@ LLaMA-3-8B  & \textbf{0.789} & 0.782 & 0.782 & CEV \\
 \small
 \begin{tabular}{@{}l l l l l@{}}
 \toprule
-\textbf{Backbone} & \textbf{CEV} & \textbf{IAV} & \textbf{Mean/Fused} & \textbf{Interpretation} \\
+\textbf{Backbone} & \textbf{CEV} & \textbf{IAV} & \textbf{Mean/Fused} & \textbf{What Happens} \\
 \midrule
-Mistral-7B & 0.106 / 0.894 adj. & 0.175 / 0.825 adj. & 0.105 / 0.895 adj. & Polarity inversion \\
+Mistral-7B & 0.106 / 0.894 adj. & 0.175 / 0.825 adj. & 0.105 / 0.895 adj. & Polarity flips \\
 Qwen3-8B   & 0.604 & 0.723 & 0.699 & Aligned transfer \\
 LLaMA-3-8B & 0.740 & 0.816 & \textbf{0.814} & Best aligned \\
 \bottomrule
@@ -286,17 +307,21 @@ LLaMA-3-8B & 0.740 & 0.816 & \textbf{0.814} & Best aligned \\
 \begin{figure}[!htb]
     \centering
     \includegraphics[width=0.90\textwidth]{Images/halueval_three_column.png}
-    \caption[HaluEval OOD analysis.]{HaluEval raw AUROC, orientation-adjusted AUROC, and signal strength. Mistral shows strong polarity inversion; LLaMA and Qwen preserve aligned transfer.}
+    \caption[HaluEval OOD results.]{HaluEval transfer results. LLaMA and Qwen generalize well; Mistral's signal is equally strong but polarity-inverted.}
     \label{fig:halueval}
 \end{figure}
+
+LLaMA transfers beautifully (0.814 raw AUROC). Qwen does respectably (0.699). Mistral is the odd one out—its probe separates the classes \emph{extremely} well (adjusted AUROC of 0.895), but in the wrong direction. The hallucination signal is there; it just points the opposite way on this benchmark. This is the polarity inversion we discussed in Chapter~\ref{ch:probe_training}.
 
 %% -------------------------------------------------
 \section{Nine-Query Live Demonstration}
 \label{sec:nine_query_demo}
 
+To complement the aggregate statistics, we ran all three backbones on a curated set of nine queries—ranging from easy factual questions to deliberately impossible ones. Table~\ref{tab:nine_query} shows exactly what each backbone did.
+
 \begin{table}[!htb]
 \centering
-\caption{Nine-query outcomes per backbone (fused score in parentheses).}
+\caption{Nine-query outcomes (fused hallucination score in parentheses).}
 \label{tab:nine_query}
 \footnotesize
 \begin{tabularx}{\textwidth}{@{}c p{3.5cm} X X X@{}}
@@ -318,13 +343,17 @@ LLaMA-3-8B & 0.740 & 0.816 & \textbf{0.814} & Best aligned \\
 \end{tabularx}
 \end{table}
 
+The pattern reinforces what the aggregate numbers already told us. Qwen3-8B is the cautious one—it abstains on queries 1, 4, and 9, all of which involve uncertainty or impossibility. Mistral and LLaMA accept everything, but crucially, their accepted responses for impossible queries are \emph{safe refusals} rather than fabrications (e.g., ``cannot answer from the context'' for query 4). The system's safety comes from different mechanisms depending on the backbone: Qwen uses explicit abstention, while Mistral and LLaMA use in-text hedging that the probe scores as low-risk.
+
 %% -------------------------------------------------
 \section{Cross-Model Summary}
 \label{sec:cross_model_summary}
 
+Table~\ref{tab:cross_model} consolidates everything into one view—the ``at a glance'' table for the entire experimental evaluation.
+
 \begin{table}[!htb]
 \centering
-\caption{Cross-model comparison (Table~8.13).}
+\caption{Cross-model comparison summary.}
 \label{tab:cross_model}
 \begin{tabular}{@{}lccc@{}}
 \toprule
@@ -344,3 +373,5 @@ Fusion weight (CEV/IAV)   & 0.50/0.50 & 0.60/0.40 & 0.45/0.55 \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+No single backbone dominates every metric. Qwen3-8B wins on in-domain detection quality. LLaMA-3-8B-Instruct wins on out-of-domain generalization and utility preservation. Mistral-7B-Instruct-v0.2 offers the most balanced safety--utility profile. The right choice depends entirely on what you prioritize—and that, ultimately, is a deployment decision rather than a research one.

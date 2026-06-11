@@ -1,7 +1,7 @@
 \chapter{Introduction}
 \label{ch:introduction}
 
-This chapter establishes the foundation and motivation for this research. Section~\ref{sec:hallucination_problem} introduces the hallucination problem in Retrieval-Augmented Generation. Section~\ref{sec:why_hooks} explains the forward-hook mechanism that enables internal-state access.
+This opening chapter lays the groundwork for the research presented in this thesis. We begin by motivating the problem—why hallucination in Retrieval-Augmented Generation remains an unsolved reliability challenge—and then explain the mechanism that makes our internal-state approach feasible: PyTorch forward hooks.
 
 %% -------------------------------------------------
 \section{The Hallucination Problem in RAG}
@@ -14,24 +14,28 @@ This chapter establishes the foundation and motivation for this research. Sectio
     \label{fig:open_vs_closed}
 \end{figure}
 
-Figure~\ref{fig:open_vs_closed} summarizes the motivation for this work. A standard RAG pipeline retrieves context, generates an answer, and returns the answer without verifying whether the generation is actually grounded in the retrieved evidence. This creates an \textbf{open-loop failure mode}: hallucinated content can reach the user even when the system has access to relevant documents.
+Consider what happens in a typical RAG system: relevant passages are retrieved, a language model generates an answer conditioned on those passages, and the answer goes straight to the user. Nobody—and no mechanism within the pipeline—checks whether what was generated actually matches the retrieved evidence. Figure~\ref{fig:open_vs_closed} contrasts this open-loop design with the closed-loop alternative we propose.
 
-The proposed pipeline adds an internal feedback stage. During generation, forward hooks extract activation features from the LLM, and lightweight probes convert those features into a hallucination-risk estimate. The controller then uses this estimate to decide whether to accept the answer, retry generation, perform re-retrieval, or abstain. The probability shown in the figure is illustrative and represents the type of signal used by the controller, not a universal threshold.
+The problem is subtle. Even when the retriever supplies perfectly relevant documents, the model can still fabricate information. It might rely on parametric knowledge that contradicts the evidence, misread the passage, or only partially integrate the context. The result is a fluent, plausible-sounding answer that nonetheless contains unsupported claims. We call this the \textbf{open-loop failure mode}—hallucinated content can reach the user because nothing in the pipeline acts on the reliability of the output before delivery.
 
-This study therefore focuses on \emph{closing the gap between hallucination detection and hallucination mitigation}: rather than only scoring a response after generation, the system uses the score to control the inference-time RAG loop.
+Our proposed pipeline introduces a feedback stage. While the model generates its response, forward hooks silently copy activation tensors from within the decoder. Lightweight probes then convert those tensors into an estimate of hallucination risk. A controller receives this estimate and makes an operational decision: accept the answer, regenerate it, fetch better evidence, or abstain entirely. The probability illustrated in Figure~\ref{fig:open_vs_closed} is meant to show the \emph{kind} of signal the controller works with, not a fixed universal threshold.
+
+In essence, this study aims to \emph{close the gap between detecting hallucination and actually doing something about it}. Rather than merely scoring a response after the fact, the system feeds that score back into the generation loop so that unreliable answers never reach the end user.
 
 %% -------------------------------------------------
 \section{Why Hooks?}
 \label{sec:why_hooks}
 
-Before describing the full closed-loop system, it is necessary to explain how the model's internal states are accessed. This work uses \textbf{PyTorch forward hooks}, which allow selected intermediate tensors to be observed during a model's forward pass without changing the model's computation.
+Before we describe the full closed-loop system, it is worth explaining the mechanism that makes internal-state probing practical. The short answer is \textbf{PyTorch forward hooks}—lightweight callback functions that let us observe intermediate tensors during the model's forward pass without altering anything about the computation itself.
 
 \subsection{What Is a Forward Hook?}
 \label{subsec:forward_hook}
 
-A forward hook is a callback function attached to a neural-network module. When the module is executed, the hook receives the module input or output and can store a copy for analysis. In this study, hooks are used \emph{passively}: they record detached activation tensors during inference and do not modify the model output, decoding process, or parameter values.
+At its core, a forward hook is simply a function that gets called whenever a particular neural-network module executes. When triggered, the hook receives whatever the module produced (or consumed) and can store a copy for later analysis. Critically, the hook does not interfere with the forward pass—it just watches.
 
-This makes hooks suitable for internal-state probing. Rather than relying only on generated text or token probabilities, the system can inspect representations formed inside the decoder while the model processes the retrieved context and generates an answer.
+In our setting, hooks are attached \emph{passively}. They record detached copies of activation tensors during inference and never modify the model's output, its decoding strategy, or its learned parameters. This passive observation is what makes the approach non-invasive: the language model continues to behave exactly as it would without the hooks.
+
+Why does this matter? Because it means we can inspect what the model is ``thinking'' internally—at any layer, for any sublayer computation—while it processes retrieved context and produces its answer. We are not limited to the final generated text or the output token probabilities; we can look deeper.
 
 \begin{figure}[!htb]
     \centering
@@ -43,18 +47,20 @@ This makes hooks suitable for internal-state probing. Rather than relying only o
 \subsection{Why Hooks Are Needed in This System}
 \label{subsec:hooks_needed}
 
-The proposed system requires two complementary internal signals:
+Our system relies on two complementary internal signals, each capturing a different aspect of the model's computation:
 
 \begin{enumerate}
-    \item \textbf{Contextualized Embedding Vector (CEV):} the residual-stream output of a decoder block, representing the accumulated contextual state after attention and feed-forward processing.
-    \item \textbf{Intermediate Activation Vector (IAV):} the SwiGLU feed-forward intermediate activation before the final $W_{\text{down}}$ projection, representing the FFN signal before it is written back into the residual stream.
+    \item \textbf{Contextualized Embedding Vector (CEV):} This is the residual-stream output of a decoder block—essentially the accumulated state after the block has performed both attention and feed-forward processing. It tells us something about how well the model has integrated the retrieved context with the query and the text generated so far.
+    \item \textbf{Intermediate Activation Vector (IAV):} This is the SwiGLU feed-forward intermediate—the gated activation computed \emph{inside} the FFN sublayer, just before the final down-projection writes it back into the residual stream. It captures the feed-forward network's own contribution, which prior work has linked to parametric-memory retrieval.
 \end{enumerate}
 
-These two tensors are not equally accessible through standard model outputs. Residual hidden states can usually be returned with \texttt{output\_hidden\_states=True}, but the intermediate SwiGLU activation inside the feed-forward sublayer is not exposed by default. Forward hooks are therefore required to capture the IAV signal directly.
+Now, the CEV is relatively easy to obtain. Most transformer implementations can return all hidden states on request. But the IAV—the intermediate value inside the FFN before the down-projection—is not something standard APIs expose. You would need to rewrite the model's forward method or, much more cleanly, attach a hook to the right submodule. Forward hooks are therefore \emph{essential} for capturing the IAV signal without modifying the backbone code.
 
-In the experiments, a single forward hook is registered at one mid-depth decoder layer, approximately $\ell^* = \lfloor L/2 \rfloor$. The CEV and IAV features from that layer are scored by lightweight MLP probes, and the resulting hallucination-risk estimate is passed to the closed-loop controller. Using one mid-depth layer rather than concatenating several depths is justified empirically by the layer-wise ablation in Section~\ref{sec:layer_selection}.
+In practice, we register a single hook at one mid-depth decoder layer (approximately $\ell^* = \lfloor L/2 \rfloor$). Both the CEV and IAV from that layer are extracted, scored by lightweight MLP probes, and the resulting hallucination-risk estimate is passed to the controller. The choice of a single mid-depth layer—rather than concatenating features from multiple depths—is justified empirically through the layer-wise ablation reported in Section~\ref{sec:layer_selection}.
 
 \subsection{Why Not Just Read Hidden States After Inference?}
 \label{subsec:why_not_after}
 
-Standard HuggingFace APIs expose only final-layer hidden states or optionally all residual-stream states. They do \emph{not} expose intermediate FFN activations (the IAV signal) without custom code. Forward hooks provide a clean, non-invasive mechanism to capture \emph{any} intermediate tensor---including the SwiGLU gated intermediate---during the live forward pass. This is why hooks are essential for this dual-signal probing architecture.
+A reasonable question. Standard HuggingFace APIs do let you retrieve all residual-stream hidden states with a single flag. But they do \emph{not} expose FFN intermediate activations—the IAV signal—without custom code. The gated intermediate inside the SwiGLU computation is simply not part of the standard output interface.
+
+Forward hooks solve this cleanly. They provide a general, non-invasive mechanism to capture \emph{any} intermediate tensor—including the SwiGLU gated activation—during the live forward pass. No model surgery required, no custom forward methods, and no performance penalty beyond the memory cost of storing one extra tensor. That is why hooks are indispensable for the dual-signal probing architecture presented in this thesis.

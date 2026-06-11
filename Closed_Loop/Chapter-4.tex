@@ -1,13 +1,13 @@
 \chapter{Background}
 \label{ch:background}
 
-This chapter provides the technical background for the proposed method. Section~\ref{sec:decoder_arch} describes the transformer decoder architecture and the hook capture points. Section~\ref{sec:cev_iav_signals} defines the CEV and IAV signals. Section~\ref{sec:why_activations} explains why activations can be useful for hallucination detection, and Section~\ref{sec:illustrative_examples} provides illustrative CEV/IAV examples.
+Before diving into the system design, we need to cover the technical foundations that make our approach possible. This chapter walks through the transformer decoder architecture and where exactly we tap into it (Section~\ref{sec:decoder_arch}), formally defines the two activation signals we rely on (Section~\ref{sec:cev_iav_signals}), explains the theoretical motivation for why those signals might be useful (Section~\ref{sec:why_activations}), and closes with worked examples showing what the probe actually sees in practice (Section~\ref{sec:illustrative_examples}).
 
 %% -------------------------------------------------
 \section{Transformer Decoder Architecture and Hook Capture Points}
 \label{sec:decoder_arch}
 
-A decoder-only transformer of the LLaMA/Mistral/Qwen family processes a token sequence $x_{1:t}$ through $L$ stacked decoder blocks. In a simplified pre-normalization form, decoder block $\ell$ can be written as:
+All three models we evaluate—LLaMA, Mistral, and Qwen—belong to the same broad family of decoder-only transformers. They process a token sequence $x_{1:t}$ by passing it through $L$ stacked decoder blocks. Each block follows the now-standard pre-normalization recipe. Written compactly, decoder block $\ell$ does two things:
 
 \begin{equation}
     \mathbf{h}_\ell = \mathbf{h}_{\ell-1} + \text{MHA}\bigl(\text{RMSNorm}(\mathbf{h}_{\ell-1})\bigr)
@@ -19,28 +19,30 @@ A decoder-only transformer of the LLaMA/Mistral/Qwen family processes a token se
     \label{eq:ffn_residual}
 \end{equation}
 
-\noindent In this work, the block output $\mathbf{h}_{\text{out}}^{(\ell)}$ is used as the \textbf{Contextualized Embedding Vector (CEV)}. It represents the accumulated residual-stream state after attention and feed-forward processing at layer~$\ell$.
+\noindent First it runs multi-head attention and adds the result back to the residual stream, then it runs the feed-forward network and adds \emph{that} result back too. The final output of the block, $\mathbf{h}_{\text{out}}^{(\ell)}$, is what we call the \textbf{Contextualized Embedding Vector (CEV)}. Think of it as a snapshot of everything the model ``knows'' at layer $\ell$—the accumulated residual-stream state after both attention and FFN have had their say.
 
-For SwiGLU-based feed-forward networks, the FFN computation can be written as:
+Now, inside that FFN, something interesting happens. These models use a gated architecture called SwiGLU:
 
 \begin{equation}
     \text{FFN}(\mathbf{x}) = W_{\text{down}} \Bigl( \text{SiLU}(W_{\text{gate}}\,\mathbf{x}) \odot (W_{\text{up}}\,\mathbf{x}) \Bigr)
     \label{eq:swiglu}
 \end{equation}
 
-\noindent where $\odot$ denotes the element-wise (Hadamard) product. The bracketed gated term,
+\noindent The $\odot$ here is the element-wise (Hadamard) product—the gate and the up-projection multiply together before the down-projection squeezes the result back into the residual-stream dimension. That bracketed gated term, just before $W_{\text{down}}$ compresses it:
 
 \begin{equation}
     \mathbf{z}_{\text{IAV}}^{(\ell)} = \text{SiLU}(W_{\text{gate}}\,\mathbf{x}) \odot (W_{\text{up}}\,\mathbf{x})
     \label{eq:iav_def}
 \end{equation}
 
-\noindent is the \textbf{Intermediate Activation Vector (IAV)}. It is captured immediately before the final $W_{\text{down}}$ projection writes the FFN contribution back into the residual stream.
+\noindent \emph{That} is our \textbf{Intermediate Activation Vector (IAV)}. We grab it right before the down-projection writes the FFN's contribution back into the residual stream. It lives in a much higher-dimensional space than the residual stream itself (14,336 dimensions for Mistral and LLaMA, 12,288 for Qwen), and it represents what the feed-forward network is ``about to inject'' into the computation.
+
+Figure~\ref{fig:decoder_block} shows these two capture points schematically within a single decoder block.
 
 \begin{figure}[!htb]
     \centering
     \includegraphics[width=0.75\textwidth]{Images/Figure3_Single_Decoder_Block.png}
-    \caption[Decoder-block capture points for CEV and IAV.]{Decoder-block capture points for CEV and IAV. The CEV is captured from the decoder block output, after attention and FFN processing have contributed to the residual stream. The IAV is captured inside the SwiGLU FFN, immediately before the final down-projection.}
+    \caption[Decoder-block capture points for CEV and IAV.]{Decoder-block capture points for CEV and IAV. The CEV comes from the block output (after attention and FFN have both contributed to the residual stream). The IAV comes from inside the SwiGLU FFN, just before the final down-projection.}
     \label{fig:decoder_block}
 \end{figure}
 
@@ -48,18 +50,18 @@ For SwiGLU-based feed-forward networks, the FFN computation can be written as:
 \section{CEV and IAV Signals}
 \label{sec:cev_iav_signals}
 
-The two activation signals are designed to capture complementary aspects of the model's computation.
+So we have two signals, and they capture genuinely different things. Let us be precise about what each one tells us.
 
-The \textbf{CEV} reflects the residual-stream state after the decoder block has integrated information through attention and feed-forward processing. It can therefore contain evidence about how the model has combined the retrieved context, query, and generated sequence.
+The \textbf{CEV} is the residual-stream state after a decoder block has finished its work. By the time we reach a mid-depth layer, this vector encodes not just token identity but how the model has blended the retrieved context with the query and with whatever text it has generated so far. If the model is integrating the evidence well, the CEV should reflect that. If it is ignoring the context or mixing it with contradictory parametric knowledge, the CEV may show signs of that too.
 
-The \textbf{IAV} reflects the FFN intermediate activation before the feed-forward contribution is written back into the residual stream. This is theoretically motivated by prior mechanistic-interpretability work showing that FFN layers can behave like key-value memories and can participate in storing or expressing factual associations~\cite{geva2021ffn,meng2022locating}.
+The \textbf{IAV} is something different entirely. It reflects what the feed-forward network is contributing—the parametric signal that will be added to the residual stream. This is theoretically motivated by work showing that FFN layers behave like key-value memories, storing factual associations that get expressed during generation~\cite{geva2021ffn,meng2022locating}. If the model is ``remembering'' something from training and injecting it into the output—regardless of whether the retrieved context supports it—the IAV is where that signal lives.
 
-In this study, CEV and IAV features are extracted from a single mid-depth decoder layer at approximately $L/2$. The last-token activation at that layer is pooled and passed to lightweight MLP probes, whose calibrated outputs are fused into a hallucination-risk score. Section~\ref{sec:layer_selection} reports the layer-wise ablation that motivates using one mid-depth layer instead of a multi-depth concatenation.
+In practice, we extract both signals from a single mid-depth layer (approximately $L/2$), take the last-token activation, and pass the resulting vectors to lightweight MLP probes. The probes' calibrated outputs are then fused into a single hallucination-risk score. Why a single mid-depth layer? The layer-wise ablation in Section~\ref{sec:layer_selection} provides the empirical justification.
 
 \begin{figure}[!htb]
     \centering
     \includegraphics[width=0.80\textwidth]{Images/cev_iav.jpeg}
-    \caption[Simplified view of CEV and IAV extraction across decoder blocks.]{Simplified view of CEV and IAV extraction across decoder blocks. The green region represents residual-stream CEV features, while the red region represents intermediate FFN IAV features. The diagram is conceptual and omits normalization layers for clarity.}
+    \caption[Simplified view of CEV and IAV extraction across decoder blocks.]{Simplified view of CEV and IAV extraction across decoder blocks. Green represents residual-stream CEV features; red represents FFN intermediate IAV features. The diagram is conceptual and omits normalization layers for visual clarity.}
     \label{fig:cev_iav_overview}
 \end{figure}
 
@@ -67,19 +69,19 @@ In this study, CEV and IAV features are extracted from a single mid-depth decode
 \section{Why Activations Can Be Useful for Hallucination Detection}
 \label{sec:why_activations}
 
-The motivation for activation probing comes from two related observations.
+At this point a skeptical reader might ask: why should internal activations tell us anything about hallucination that the output text does not? The motivation rests on two observations from prior work.
 
-\textbf{First}, the \emph{residual stream} acts as an accumulated representational state. At later layers, it reflects not only token identity but also how the model has integrated the prompt, retrieved context, and generated response. Prior work has shown that hidden activations can contain information related to factuality and truthfulness~\cite{azaria2023saplma}.
+\textbf{The residual stream encodes more than token identity.} By the middle and later layers of a transformer, the residual stream has accumulated not just what tokens appeared in the input but \emph{how} the model integrated and processed those tokens. Prior research has shown that simple classifiers trained on these hidden states can predict factuality and truthfulness at non-trivial accuracy~\cite{azaria2023saplma}. The surface text might look fine, but the internal representations can betray uncertainty or inconsistency.
 
-\textbf{Second}, \emph{FFN layers} are not merely generic nonlinear transformations. Mechanistic-interpretability studies suggest that transformer FFN layers can behave like key-value memories, where input patterns activate stored associations that influence the output-token distribution~\cite{geva2021ffn}. Factual associations can also be localized and edited through MLP/FFN modules~\cite{meng2022locating}. These findings motivate inspecting the IAV signal as a possible indicator of parametric-memory contribution.
+\textbf{FFN layers are not just generic nonlinearities.} Mechanistic interpretability work has revealed that transformer FFN layers function somewhat like key-value memories~\cite{geva2021ffn}. Input patterns activate stored associations, and those associations influence what the model generates next. Factual knowledge can be localized within specific FFN modules and even edited there~\cite{meng2022locating}. This means the IAV signal—the intermediate activation before down-projection—may carry a particularly direct signature of what parametric knowledge the model is injecting.
 
-This does not imply that CEV or IAV alone can perfectly identify hallucination. Instead, the working hypothesis is that the two signals provide \emph{complementary evidence}: CEV captures context-integration behavior, while IAV captures feed-forward activation patterns associated with parametric knowledge use.
+We do not claim that either signal is a perfect hallucination detector on its own. The hypothesis is more modest: CEV and IAV provide \emph{complementary evidence}. CEV captures how well the model integrated the retrieved context. IAV captures what the feed-forward network is contributing from parametric memory. When both signals agree that a response looks grounded, we have more confidence. When one or both raise a red flag, the controller can intervene.
 
 %% -------------------------------------------------
 \section{Illustrative CEV/IAV Examples}
 \label{sec:illustrative_examples}
 
-The following examples are illustrative and are intended to clarify how the probe uses CEV and IAV features. The shown vector values are truncated for readability and should not be interpreted as individual neuron explanations.
+To make these ideas concrete, we walk through three example scenarios. These are illustrative—the activation values shown are truncated and schematic rather than literal neuron readouts. The point is to show \emph{how} the probe interprets different activation patterns, including a case where it fails.
 
 \subsection{Grounded Response}
 
@@ -91,15 +93,17 @@ The following examples are illustrative and are intended to clarify how the prob
 \end{groundedbox}
 
 \begin{activationbox}[Illustrative Activation Pattern]
-\textit{CEV at layer~16 (4096-dim vector, truncated):}\\
+\textit{CEV at layer~16 (4096-dim, truncated):}\\
 $\uparrow$ High positive values in ``factual recall'' dimensions\\
-$\uparrow$ Pattern: consistent with context-supported generation\\[6pt]
-\textit{IAV at layer~16 (14336-dim, MLP pre-down\_proj, truncated):}\\
+$\uparrow$ Pattern consistent with context-supported generation\\[6pt]
+\textit{IAV at layer~16 (14336-dim, pre-down\_proj, truncated):}\\
 $\uparrow$ Strongly activated ``historical date'' neurons\\
-$\uparrow$ Pattern: MLP is injecting a well-encoded factual year
+$\uparrow$ MLP injecting a well-encoded factual year—aligned with context
 \end{activationbox}
 
 \vspace{0.4em}
+\noindent Here the retrieved passage directly supports the generated answer. Both CEV and IAV show patterns consistent with faithful, context-grounded generation. The fused probe score comes out low:
+
 \noindent\textbf{Controller decision:} $p_{\text{hallucination}} = 0.33 < \theta_{\text{hallu}} = 0.62 \;\Rightarrow\;$ \textcolor{acceptgreen}{\textbf{ACCEPT}}.
 
 \subsection{Hallucinated Response}
@@ -112,14 +116,16 @@ $\uparrow$ Pattern: MLP is injecting a well-encoded factual year
 \end{hallucinatedbox}
 
 \begin{activationbox}[Illustrative Activation Pattern]
-$\uparrow$ Weak, mixed activation --- no strong factual grounding signal\\
-$\uparrow$ Context was irrelevant; residual stream shows low coherence\\
-$\uparrow$ ``census'' and ``number'' neurons partially fire\\
-$\uparrow$ But ``Atlantis'' + ``population'' activates confabulation patterns\\
-$\uparrow$ IAV encodes ``fabricating a plausible number from context pattern''
+$\uparrow$ Weak, mixed CEV activation—no strong factual grounding signal\\
+$\uparrow$ Context was only superficially related; residual stream shows low coherence\\
+$\uparrow$ ``Census'' and ``number'' neurons partially fire in IAV\\
+$\uparrow$ But ``Atlantis'' + ``population'' triggers confabulation patterns\\
+$\uparrow$ IAV encodes something like ``fabricating a plausible number from context cues''
 \end{activationbox}
 
 \vspace{0.4em}
+\noindent The retrieved passage mentions a census and population figures—but for real places, not Atlantis. The model latches onto superficial pattern matches and confidently invents a specific number. Both the CEV (low coherence with context) and IAV (confabulation patterns) produce high risk scores:
+
 \noindent\textbf{Controller decision:} $p_{\text{hallucination}} = 0.78 \geq \theta_{\text{abs}} = 0.75 \;\Rightarrow\;$ \textcolor{abstainred}{\textbf{ABSTAIN}}.
 
 \subsection{Failure Case: Plausible but Unsupported Extraction}
@@ -129,19 +135,21 @@ $\uparrow$ IAV encodes ``fabricating a plausible number from context pattern''
 \textbf{Retrieved context:} ``Common breakfast foods include eggs, toast, coffee, and fruit.''\\[4pt]
 \textbf{Generated response:} ``Based on the context, you had eggs, toast, and coffee.''\\[4pt]
 \textbf{Expected label:} Hallucinated / unsupported.\\[4pt]
-\textbf{Why this is difficult:} The retrieved passage is only topically related and lacks the specific user fact required. The model treats generic context as supporting evidence.
+\textbf{Why this is tricky:} The passage is topically related but lacks the specific personal fact. The model treats generic context as if it were supporting evidence.
 \end{failurebox}
 
 \begin{activationbox}[Illustrative Activation Pattern]
-$\uparrow$ \textbf{IDENTICAL} to the factual grounding pattern!\\
-$\uparrow$ The model found relevant context (``breakfast foods'') and extracted an answer\\
-$\uparrow$ Its hidden state looks like factual retrieval\\
-$\uparrow$ ``Food'' + ``list'' neurons strongly activated\\
-$\uparrow$ MLP is injecting a food list --- looks exactly like answering a factual question
+$\uparrow$ \textbf{Nearly identical} to the factual grounding pattern!\\
+$\uparrow$ Model found relevant context (``breakfast foods'') and extracted an answer\\
+$\uparrow$ Hidden state looks like ordinary factual retrieval\\
+$\uparrow$ ``Food'' + ``list'' neurons strongly activated in IAV\\
+$\uparrow$ MLP injecting a food list—indistinguishable from answering a real factual question
 \end{activationbox}
 
 \vspace{0.4em}
+\noindent This is where the probe fails. The model \emph{is} doing something that looks exactly like grounded extraction—it found food items in the context and reported them. The problem is that ``common breakfast foods'' is not the same as ``what \emph{you} ate yesterday.'' But from the model's internal perspective, the computation is virtually identical to legitimate context-supported generation. The probe scores it as low-risk:
+
 \noindent\textbf{Controller decision:} $p_{\text{hallucination}} = 0.42 < \theta_{\text{hallu}} = 0.62 \;\Rightarrow\;$ \textcolor{abstainred}{\textbf{ACCEPT} $\boldsymbol{\times}$ (WRONG)}.
 
 \vspace{0.5em}
-This example clarifies that the proposed probe is not a perfect factuality oracle. It estimates hallucination risk from internal activation patterns, but it may fail when the model performs plausible extraction from context that is relevant but insufficient.
+We include this failure case deliberately. It illustrates an important limitation: our probe is not a perfect factuality oracle. It reads activation patterns, and when the pattern of ``plausible extraction from topically relevant context'' looks identical to ``genuine grounded retrieval,'' the probe cannot distinguish them. Recognizing this boundary is essential for understanding what the system can and cannot do.

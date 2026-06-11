@@ -1,15 +1,17 @@
 \chapter{Probe Training, Calibration, and Cross-Domain Transfer}
 \label{ch:probe_training}
 
-This chapter describes how the probes are trained, calibrated, and evaluated for cross-domain transfer. Section~\ref{sec:training_protocol} presents the probe architecture and training protocol. Section~\ref{sec:training_dynamics} describes training dynamics and HaluEval transfer. Section~\ref{sec:calibration_fusion} covers post-training calibration and probability-level fusion, and Section~\ref{sec:ch6_summary} summarizes the findings.
+Having described the architecture, we now turn to how the probes are actually trained, how we ensure their outputs are well-calibrated, and—critically—whether the learned signals hold up when tested on data the probes have never seen before.
 
 %% -------------------------------------------------
 \section{Probe Architecture and Training Protocol}
 \label{sec:training_protocol}
 
-For each backbone, two independent MLP probes are trained: one for the \textbf{CEV} feature vector $\boldsymbol{\phi}(\mathbf{x})$, and one for the \textbf{IAV} feature vector $\boldsymbol{\psi}(\mathbf{x})$. The two probes use the same two-hidden-layer MLP architecture defined in Section~\ref{sec:probe_arch} (Table~\ref{tab:probe_architecture}) but receive different input dimensions because CEV and IAV are extracted from different representational spaces.
+For each backbone, we train two independent MLP probes: one that receives the CEV feature vector $\boldsymbol{\phi}(\mathbf{x})$, and another that receives the IAV feature vector $\boldsymbol{\psi}(\mathbf{x})$. Both use the same two-hidden-layer architecture described in Section~\ref{sec:probe_arch} (Table~\ref{tab:probe_architecture}), but they accept different input dimensions since CEV and IAV come from different representational spaces.
 
-The two output logits correspond to the \textbf{grounded} and \textbf{hallucinated} classes (label convention: $y = 0$ for grounded, $y = 1$ for hallucinated). After training, temperature scaling is applied to convert logits into calibrated hallucination probabilities.
+The label convention is straightforward: $y = 0$ means the response is grounded (supported by the retrieved context), and $y = 1$ means it is hallucinated. After training converges, we apply temperature scaling to turn the raw logits into calibrated probabilities—a step that matters a great deal when the downstream controller makes decisions based on absolute probability values rather than just rankings.
+
+Table~\ref{tab:training_config} consolidates the full training recipe.
 
 \begin{table}[!htb]
 \centering
@@ -35,72 +37,74 @@ Checkpoint selection    & Best validation AUROC \\
 \end{tabular}
 \end{table}
 
-The rationale for these choices---class-weight derivation, label-smoothing motivation, and per-backbone learning-rate selection---is given in Section~\ref{sec:probe_training_details}.
+Why these specific choices? The class weighting corrects for label imbalance, the label smoothing prevents overconfident predictions (which would hurt calibration), and the per-backbone learning rates reflect empirical tuning—Mistral's activations turned out to be more format-sensitive and needed a gentler optimizer step. The full rationale is in Section~\ref{sec:probe_training_details}.
 
 %% -------------------------------------------------
 \section{Training Dynamics and HaluEval Transfer}
 \label{sec:training_dynamics}
 
-Figure~\ref{fig:training_halueval} summarizes two complementary evaluation views. The \textbf{top row} shows in-domain probe training behavior on the RAGTruth validation split. The \textbf{bottom row} shows cross-domain transfer to HaluEval.
+Figure~\ref{fig:training_halueval} tells two stories at once. The top row shows how training progresses on the RAGTruth validation split—our in-domain sanity check. The bottom row asks a harder question: do these probes still work when applied to HaluEval, a completely different hallucination benchmark they were never trained on?
 
 \begin{figure}[!htb]
     \centering
     \includegraphics[width=0.95\textwidth]{Images/compare_training_and_halueval_grid.png}
-    \caption[Probe training dynamics and HaluEval cross-domain ROC curves.]{Probe training dynamics and HaluEval cross-domain ROC curves. Top row: probe training loss and validation metrics for all three backbones. Bottom row: HaluEval ROC curves for CEV, IAV, and fused/mean probe scores.}
+    \caption[Probe training dynamics and HaluEval cross-domain ROC curves.]{Top row: in-domain training loss and validation AUROC for all three backbones. Bottom row: HaluEval out-of-domain ROC curves for CEV, IAV, and fused scores.}
     \label{fig:training_halueval}
 \end{figure}
 
 \subsection{In-Domain Training Behavior}
 \label{sec:indomain_training}
 
-The training-loss curves in the top row of Figure~\ref{fig:training_halueval} show stable convergence for all three backbones. Both CEV and IAV probe losses decrease smoothly across epochs, indicating that the probes learn useful decision boundaries from the extracted activation features.
+The good news first: training is well-behaved across the board. Loss curves decrease smoothly for both CEV and IAV probes on all three backbones—no instability, no sudden collapses. Validation AUROC climbs and then plateaus, which tells us the probes are learning genuine patterns rather than memorizing training examples.
 
-The validation curves show that AUROC remains stable rather than collapsing or oscillating severely. This suggests that the probes are not merely memorizing the training data. Instead, they learn hallucination-relevant activation patterns that generalize to the held-out RAGTruth validation split.
-
-The validation behavior also supports the dual-signal design. IAV is generally strong across all three backbones, while CEV remains competitive and contributes complementary context-integration information. This supports the decision to train two separate probes and fuse their calibrated probabilities rather than relying on a single hidden-state source.
+What is particularly encouraging is that the dual-signal design holds up empirically. IAV tends to be the stronger individual branch, but CEV is never far behind and clearly contributes complementary information. This validates our choice to train two separate probes and fuse them, rather than betting everything on a single signal source.
 
 \subsection{HaluEval Cross-Domain Transfer}
 \label{sec:halueval_transfer}
 
-The bottom row of Figure~\ref{fig:training_halueval} evaluates whether RAGTruth-trained probes transfer to HaluEval, an out-of-domain hallucination benchmark. The results show that cross-domain transfer is strongly backbone-dependent. The full per-backbone AUROC values are reported once in Table~\ref{tab:halueval_ood} (Section~\ref{sec:halueval_ood}) and are not repeated here.
+The bottom row of Figure~\ref{fig:training_halueval} is where things get interesting—and, for one backbone, surprising.
 
-The \textbf{raw AUROC} is the primary reported metric. For LLaMA-3-8B-Instruct and Qwen3-8B, raw AUROC values are above 0.5, meaning the probes assign higher hallucination probabilities to hallucinated HaluEval answers than to correct answers.
+For LLaMA-3-8B-Instruct and Qwen3-8B, transfer works as one would hope. The raw AUROC values land above 0.5, meaning the probes trained on RAGTruth still assign higher hallucination scores to the hallucinated HaluEval answers than to the correct ones. The signal generalizes.
 
-For Mistral-7B-Instruct-v0.2, all raw AUROC values are far below 0.5. This indicates \textbf{polarity inversion}, not random failure. A raw mean AUROC of 0.105 means that the probe separates the classes strongly, but in the opposite direction from the RAGTruth-trained label convention. The adjusted value, $1 - 0.105 = 0.895$, should be read only as a diagnostic of signal strength, not as the main HaluEval result.
+Mistral-7B-Instruct-v0.2 is a different story. Its raw AUROC values are far \emph{below} 0.5—around 0.105. At first glance this looks like a catastrophic failure. But look more carefully: an AUROC of 0.105 is not random (which would give 0.5). It means the probe is separating the classes \emph{very well}—just in the opposite direction. The adjusted value of $1 - 0.105 = 0.895$ tells us the discriminative power is actually excellent; the polarity just flipped under distribution shift.
+
+The full numerical breakdown is in Table~\ref{tab:halueval_ood} (Section~\ref{sec:halueval_ood}). We do not repeat the numbers here.
 
 \subsection{Interpretation of Mistral Polarity Inversion}
 \label{sec:polarity_inversion}
 
-The Mistral-7B-Instruct-v0.2 result should not be treated as a coding error, because the raw AUROC is not near 0.5. It indicates that the model learned a strong discriminative internal-state signal whose direction flips under distribution shift. Importantly, this run uses the fully instruction-tuned Mistral-7B-Instruct-v0.2 checkpoint, so the inversion cannot be attributed to weak instruction tuning.
+This polarity inversion deserves careful interpretation. It is \emph{not} a bug in the code—if it were random noise, the AUROC would hover around 0.5, not plunge to 0.105. And it is not caused by using a base model instead of an instruction-tuned one; we explicitly use the fully tuned Mistral-7B-Instruct-v0.2 checkpoint.
 
-The correct interpretation is: \emph{Mistral-7B-Instruct-v0.2 exhibits a strong but polarity-inverted out-of-domain signal on HaluEval, while LLaMA-3-8B-Instruct and Qwen3-8B preserve aligned raw discrimination. Because the gap persists with the fully instruction-tuned checkpoint, it is best explained as an architectural/representational property of Mistral rather than a deficiency of instruction tuning.}
+What seems to be happening is that Mistral's internal representations encode hallucination-relevant information in a way that is directionally specific to the training distribution. When the distribution shifts (from RAGTruth to HaluEval), the \emph{meaning} of certain activation patterns flips. The signal is strong but its sign reverses.
 
-This finding highlights a key deployment caveat: internal-state hallucination probes are distribution-sensitive. Before deployment in a new domain, benchmark, or prompt format, the probe should be validated or recalibrated using representative target-domain examples.
+The practical takeaway is sobering but important: \emph{you cannot assume that an internal-state probe will transfer automatically to a new domain, benchmark, or prompt format.} Before deploying in a new setting, the probe needs to be validated—and possibly recalibrated—on representative examples from the target distribution.
 
 \subsection{Comparison with the Triple-Layer Configuration}
 \label{sec:triple_comparison}
 
-Section~\ref{sec:layer_selection} compared layer configurations by detection AUROC and probe size. The same comparison can be made on training dynamics and out-of-domain HaluEval ROC to confirm that the single mid-depth layer does not give up anything that only surfaces during training or under distribution shift.
+One might wonder whether the three-layer concatenation handles distribution shift better than our single mid-layer approach—maybe the extra depth diversity helps with generalization? We checked. It does not.
 
-The triple-layer concatenation produces very similar training curves and HaluEval ROC behavior: Mistral still shows polarity inversion, LLaMA and Qwen still show aligned transfer, and no metric meaningfully exceeds the single mid-depth result. This confirms the layer-selection decision made in Section~\ref{sec:layer_selection}.
+The triple configuration produces nearly identical training curves and HaluEval ROC behavior. Mistral still shows polarity inversion. LLaMA and Qwen still show aligned transfer. No metric meaningfully improves over the single mid-depth result. The extra parameters buy nothing, which further validates the layer-selection decision from Section~\ref{sec:layer_selection}.
 
 %% -------------------------------------------------
 \section{Post-Training Calibration and Fusion}
 \label{sec:calibration_fusion}
 
-After training, each probe is calibrated independently using temperature scaling:
+Once training is complete, we calibrate each probe independently using temperature scaling:
 \begin{equation}
     P(y = 1) = \text{softmax}\!\left(\frac{\mathbf{z}}{T}\right)
 \end{equation}
-where the temperature $T$ is selected on the validation split by minimizing validation negative log-likelihood.
 
-Separate calibration is necessary because CEV and IAV probes can have different confidence profiles. A CEV probe may be well-ranked but overconfident, while an IAV probe may produce a different probability scale. Temperature scaling makes their outputs more comparable before fusion.
+\noindent The temperature $T$ is found by minimizing validation negative log-likelihood. Why bother with this step? Because the controller makes threshold-based decisions. If the probe outputs 0.65 when it really means 0.45, the controller will over-intervene. Calibration ensures that the probability values \emph{mean what they say}.
 
-After calibration, the CEV and IAV probabilities are fused using the validation-tuned convex combination defined in Section~\ref{subsec:detection_network}:
+We calibrate CEV and IAV separately because the two probes can have quite different confidence profiles. One might be well-ranked but systematically overconfident; the other might be better calibrated but with weaker discrimination. Temperature scaling brings them onto a common scale before fusion.
+
+After calibration, the two probabilities are combined:
 \[
     p_{\text{fused}} = w \cdot p_{\text{CEV}} + (1 - w) \cdot p_{\text{IAV}}
 \]
-with $w$ selected on the validation split to maximize AUROC. This fusion is performed at the probability level, not by concatenating raw vectors, preserving the independence of the two feature spaces.
+
+\noindent with $w$ selected by grid search on the validation split to maximize AUROC. Importantly, this fusion happens at the \emph{probability} level—not by concatenating raw activation vectors into a bigger classifier. Each probe keeps its own learned decision boundary; we combine their judgments, not their inputs.
 
 \begin{table}[!htb]
 \centering
@@ -126,6 +130,12 @@ Controller input          & $p_{\text{fused}}$ \\
 \section{Summary}
 \label{sec:ch6_summary}
 
-The training curves show that CEV and IAV probes learn stable in-domain hallucination signals on RAGTruth. The HaluEval ROC curves show that these signals can transfer out of domain, but transfer behavior is model-dependent. Qwen3-8B shows the strongest aligned transfer, LLaMA-3-8B-Instruct shows good aligned transfer, and Mistral-7B-Instruct-v0.2 shows strong but polarity-inverted discrimination.
+What have we learned in this chapter? Three things stand out.
 
-The main conclusion from this chapter is that internal-state probes are useful but must be calibrated and validated carefully. Their raw scores should not be assumed to transfer unchanged across datasets, benchmarks, or application domains.
+First, the probes train stably and learn genuine hallucination-relevant patterns on RAGTruth—both CEV and IAV converge smoothly, and validation metrics confirm generalization to the held-out split.
+
+Second, out-of-domain transfer is real but model-dependent. Qwen3-8B and LLaMA-3-8B-Instruct preserve their discriminative direction on HaluEval. Mistral-7B-Instruct-v0.2 retains strong discrimination but with inverted polarity—a fascinating finding that underscores how distribution-sensitive these probes can be.
+
+Third, calibration is not optional. Because the downstream controller makes absolute-threshold decisions, the probes need to output probabilities that actually correspond to empirical risk levels. Temperature scaling provides this, and probability-level fusion keeps the two signals independent while combining their strengths.
+
+The bottom line: internal-state probes work, but they are not plug-and-play across domains. Validate before you deploy.
