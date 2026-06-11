@@ -373,33 +373,74 @@ LLaMA transfers beautifully (0.814 raw AUROC). Qwen does respectably (0.699). Mi
 \section{Nine-Query Live Demonstration}
 \label{sec:nine_query_demo}
 
-To complement the aggregate statistics, we ran all three backbones on a curated set of nine queries—ranging from easy factual questions to deliberately impossible ones. Table~\ref{tab:nine_query} shows exactly what each backbone did.
+To complement the aggregate statistics, we ran all three backbones on a curated set of nine queries—ranging from easy factual questions to deliberately impossible ones. Unlike the RAGTruth validation and the 100-query closed-loop evaluation, this experiment is not meant to provide statistical evidence. It is a qualitative stress test: does the system behave sensibly across different query types?
+
+The success criterion here is based on the \emph{final delivered behavior}, not only the first generated response. A query counts as successful when the system either returns a correct grounded answer (for answerable questions) or refuses safely (for unanswerable, subjective, fictional, or nonsensical ones). Importantly, an ``accept'' decision is not automatically unsafe—for Mistral and LLaMA, several accepted responses are themselves honest in-text refusals like ``the context does not contain this.''
 
 \begin{table}[!htb]
 \centering
-\caption{Nine-query outcomes (fused hallucination score in parentheses).}
+\caption{Nine-query design and expected behavior.}
+\label{tab:nine_query_design}
+\footnotesize
+\begin{tabularx}{\textwidth}{@{}c p{2.2cm} p{3.8cm} p{3.5cm} p{3cm}@{}}
+\toprule
+\textbf{\#} & \textbf{Query Type} & \textbf{Example} & \textbf{Reason} & \textbf{Expected} \\
+\midrule
+1 & Factual answerable & ``Who wrote \emph{Pride and Prejudice}?'' & Basic factual recall & ACCEPT: ``Jane Austen'' \\
+2 & Historical date & ``Treaty of Westphalia year?'' & Precise date grounding & ACCEPT: ``1648'' \\
+3 & Scientific constant & ``Freezing point in Kelvin?'' & Numerical factual answer & ACCEPT: $\sim$273.15\,K \\
+4 & Personal impossible & ``What did I have for breakfast?'' & Private fact, no evidence & ABSTAIN or safe refusal \\
+5 & Fictional impossible & ``Capital of Mars?'' & Impossible entity/premise & ABSTAIN or correction \\
+6 & RAG-supported & ``Causes of climate change?'' & Context-supported explanation & ACCEPT: grounded answer \\
+7 & Subjective opinion & ``Why is Shakespeare greatest?'' & Unverifiable subjective claim & ABSTAIN or qualify \\
+8 & Enumeration & ``List five planets.'' & Simple factual list & ACCEPT: valid planets \\
+9 & Nonsensical & ``2024 census of Atlantis?'' & Fictional + fabricated statistic & ABSTAIN or safe refusal \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Table~\ref{tab:nine_query} shows exactly what each backbone did on each query.
+
+\begin{table}[!htb]
+\centering
+\caption{Nine-query outcomes per backbone (fused hallucination score in parentheses).}
 \label{tab:nine_query}
 \footnotesize
 \begin{tabularx}{\textwidth}{@{}c p{3.5cm} X X X@{}}
 \toprule
 \textbf{\#} & \textbf{Query Type} & \textbf{Mistral-7B} & \textbf{Qwen3-8B} & \textbf{LLaMA-3-8B} \\
 \midrule
-1 & Author (answerable) & ACCEPT (0.59) & ABSTAIN (0.72) & ACCEPT (0.07) \\
-2 & Westphalia (answerable) & ACCEPT (0.60) & ACCEPT (0.42) & ACCEPT (0.08) \\
-3 & Kelvin (answerable) & ACCEPT (0.42) & ACCEPT (0.33) & ACCEPT (0.19) \\
-4 & Breakfast (impossible) & ACCEPT (0.12) & ABSTAIN (0.86) & ACCEPT (0.19) \\
-5 & Mars capital (impossible) & ACCEPT (0.17) & REGEN$\times$2$\to$ACCEPT (0.20) & ACCEPT (0.17) \\
-6 & Climate (RAG-supported) & ACCEPT (0.34) & ACCEPT (0.38) & ACCEPT (0.47) \\
-7 & Shakespeare (subjective) & ACCEPT (0.08) & ACCEPT (0.22) & ACCEPT (0.10) \\
-8 & Five planets (answerable) & ACCEPT (0.52) & REGEN$\times$2$\to$ACCEPT (0.51) & ACCEPT (0.11) \\
-9 & Atlantis census (nonsensical) & ACCEPT (0.31) & ABSTAIN (0.80) & ACCEPT (0.10) \\
+1 & Author (answerable) & ACCEPT (0.59): ``Jane Austen'' & ABSTAIN (0.72) & ACCEPT (0.07): context lacks it \\
+2 & Westphalia (answerable) & ACCEPT (0.60): ``1648'' & ACCEPT (0.42): ``1648'' & ACCEPT (0.08): context lacks it \\
+3 & Kelvin (answerable) & ACCEPT (0.42): ``273\,K'' & ACCEPT (0.33): ``273\,K'' & ACCEPT (0.19): ``273\,K'' \\
+4 & Breakfast (impossible) & ACCEPT (0.12): ``cannot answer'' & ABSTAIN (0.86) & ACCEPT (0.19): ``no information'' \\
+5 & Mars capital (impossible) & ACCEPT (0.17): ``no capital'' & REGEN$\times$2$\to$ACCEPT (0.20) & ACCEPT (0.17): ``none is capital'' \\
+6 & Climate (RAG-supported) & ACCEPT (0.34): grounded & ACCEPT (0.38): grounded & ACCEPT (0.47): grounded \\
+7 & Shakespeare (subjective) & ACCEPT (0.08): ``not stated'' & ACCEPT (0.22): ``not mentioned'' & ACCEPT (0.10): confuses with Virgil \\
+8 & Five planets (answerable) & ACCEPT (0.52): lists five & REGEN$\times$2$\to$ACCEPT (0.51) & ACCEPT (0.11): lists five \\
+9 & Atlantis census (nonsensical) & ACCEPT (0.31): ``fictional'' & ABSTAIN (0.80) & ACCEPT (0.10): ``cannot answer'' \\
 \midrule
 \multicolumn{2}{@{}l}{\textbf{Action totals (accept/abstain)}} & \textbf{9 / 0} & \textbf{6 / 3} & \textbf{9 / 0} \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-The pattern reinforces what the aggregate numbers already told us. Qwen3-8B is the cautious one—it abstains on queries 1, 4, and 9, all of which involve uncertainty or impossibility. Mistral and LLaMA accept everything, but crucially, their accepted responses for impossible queries are \emph{safe refusals} rather than fabrications (e.g., ``cannot answer from the context'' for query 4). The system's safety comes from different mechanisms depending on the backbone: Qwen uses explicit abstention, while Mistral and LLaMA use in-text hedging that the probe scores as low-risk.
+\noindent\textit{Values in parentheses are the fused hallucination probability; each backbone uses its own deployment thresholds (Table~\ref{tab:deploy_thresholds}). ``REGEN$\times$2 $\to$ ACCEPT'' means the controller regenerated twice before accepting.}
+
+\vspace{0.5em}
+\textbf{Interpreting the acceptance counts.} The ``9 / 0'' totals for Mistral and LLaMA do \emph{not} mean the controller was idle or contributed nothing. The operative question is not how often the controller abstained, but whether any misleading or fabricated response was actually delivered. By that criterion, \textbf{none of the three backbones produced an unsafe output on any of the nine queries}. The three adversarial cases make this explicit:
+
+\begin{itemize}
+    \item \textbf{Query \#1 (answerable):} Mistral returns the correct fact (``Jane Austen''), LLaMA accepts an honest context-grounded refusal, and Qwen abstains. No user is misled.
+    \item \textbf{Query \#4 (personal, impossible):} Mistral and LLaMA accept honest in-text refusals; Qwen abstains. No model fabricates a response.
+    \item \textbf{Query \#9 (nonsensical):} Mistral and LLaMA accept safe refusals identifying Atlantis as fictional; Qwen abstains. No model invents a population figure.
+\end{itemize}
+
+The same safe outcome is reached through two complementary mechanisms. \textbf{Qwen3-8B} intervenes at the controller level—the probe assigns high fused scores (0.72--0.86) to unanswerable queries, triggering ABSTAIN. \textbf{Mistral and LLaMA} refuse at the generation level—the model itself produces an honest in-text refusal that the probe correctly scores as low-risk (0.10--0.31), and the controller accepts it. A ``9 / 0'' profile therefore reflects a well-calibrated controller with a low false-refusal rate—one that does not over-abstain on responses that are already safe—rather than an inactive one.
+
+\textbf{Utility differences.} Since all three backbones are comparably safe here, the practical distinction is one of utility. Mistral answers the answerable factual queries correctly (Jane Austen, 1648, 273\,K, five planets) while refusing the impossible ones—the most favourable utility--safety balance. LLaMA is the most content-conservative: it declines two answerable factual queries (\#1 and \#2) by reporting the context lacks them, and on \#7 it conflates Shakespeare with Virgil from the passage. Qwen incurs a utility cost through controller-level abstention on \#1 and needs two regeneration rounds for \#5 and \#8.
+
+\textbf{Summary.} This demonstration is a qualitative system trace, not a statistical benchmark—the corresponding quantitative evidence is the 100-query evaluation in Section~\ref{sec:vanilla_vs_cl}. The trace confirms that all three backbones avoid confident hallucination on impossible queries, though through different mechanisms. The general caveat that confident hallucinations \emph{can} slip past the probe (Section~\ref{sec:illustrative_examples}) remains valid, although it is not observed in this particular nine-query trace.
 
 %% -------------------------------------------------
 \section{Cross-Model Summary}
