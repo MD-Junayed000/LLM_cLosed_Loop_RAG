@@ -1,4 +1,4 @@
-**CLOSING THE LOOP ON RAG HALLUCINATIONS: INFERENCE-TIME CORRECTION VIA RESIDUAL STREAM AND FFN ACTIVATION PROBING**
+**Closing the Loop on RAG Hallucinations: Inference-Time Control via Dual Residual-Stream and FFN Activation Probes**
 
 ##### *by*
 
