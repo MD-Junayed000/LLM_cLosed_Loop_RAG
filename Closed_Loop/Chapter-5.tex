@@ -25,7 +25,7 @@ The system breaks down into four main blocks. Let us walk through each one.
 \subsection{Retrieval Engine}
 \label{subsec:retrieval_engine}
 
-Nothing exotic here—we use a standard dense-retrieval setup. Documents are encoded with the BAAI/bge-base-en-v1.5 embedding model~\cite{xiao2023bge}, which produces 768-dimensional vectors. These get indexed using FAISS~\cite{johnson2019faiss}. At query time, the same embedding model encodes the user query, and we retrieve the top-$k$ most similar passages.
+Nothing exotic here—we use a standard dense-retrieval setup~\cite{karpukhin2020dpr}. Documents are encoded with the BAAI/bge-base-en-v1.5 embedding model~\cite{xiao2023bge}, which produces 768-dimensional vectors. These get indexed using FAISS~\cite{johnson2019faiss}. At query time, the same embedding model encodes the user query, and we retrieve the top-$k$ most similar passages.
 
 We also compute a retrieval quality score—basically, how good a match did we get?
 
