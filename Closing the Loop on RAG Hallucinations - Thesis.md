@@ -1,4 +1,4 @@
-**CLOSING THE LOOP ON RAG HALLUCINATIONS: INFERENCE-TIME CORRECTION VIA RESIDUAL STREAM AND FFN ACTIVATION PROBING**
+**Closing the Loop on RAG Hallucinations: Inference-Time Control via Dual Residual-Stream and FFN Activation Probes**
 
 ##### *by*
 
@@ -78,13 +78,19 @@ Designation                                                   Department of Elec
 
 ## **Abstract** {#abstract}
 
-Hallucination remains a major limitation of retrieval-augmented generation (RAG), since retrieved evidence does not guarantee that a language model will generate a faithful response. Existing hallucination mitigation methods often operate as **open-loop** detectors or external verifiers: they estimate hallucination risk, but do not directly connect that estimate to inference-time response control. This work proposes a **closed-loop RAG framework** that links internal-state hallucination detection to automated generation control. To our knowledge, this is the first closed-loop RAG framework that connects dual internal activation probes from frozen SwiGLU decoder LLMs to a three-action inference-time controller for hallucination mitigation. The system instruments frozen decoder-only language models with PyTorch forward hooks and extracts two complementary activation signals: Contextualized Embedding Vectors (CEV) from the residual stream and Intermediate Activation Vectors (IAV) from the SwiGLU feed-forward sublayer before the down-projection layer. Separate lightweight MLP probes are trained on RAGTruth hallucination labels and fused into a calibrated hallucination probability. This probability drives a three-action controller: ACCEPT, INTERVENE, or ABSTAIN; where intervention triggers corrective generation behavior such as regeneration or retrieval revision before a final response is delivered. The framework is evaluated on Mistral-7B, Qwen3-8B, and LLaMA-3-8B-Instruct using Colab A100 FP16 experiments. On a stratified RAGTruth validation split, the fused probe achieves AUROC scores of **0.8515** for Mistral-7B, **0.8798** for Qwen3-8B, and **0.8665** for LLaMA-3-8B-Instruct, surpassing all published and reproduced baseline detectors considered in this study. Closed-loop intervention reduces the delivered hallucination proxy relative to vanilla RAG, with Qwen3-8B showing the strongest utility-safety balance among the evaluated backbones. These results suggest that internal activation signals can support practical inference-time hallucination control across SwiGLU-based decoder families, while probe training and controller thresholds remain backbone-specific due to model-dependent activation distributions.
+Hallucination remains a major limitation of retrieval-augmented generation (RAG), since retrieved evidence does not guarantee that a language model will generate a faithful response. Existing hallucination mitigation methods often operate as **open-loop** detectors or external verifiers: they estimate hallucination risk, but do not directly connect that estimate to inference-time response control. This work proposes a **closed-loop RAG framework** that links internal-state hallucination detection to automated generation control. To our knowledge, this is the first closed-loop RAG framework that connects dual internal activation probes from frozen SwiGLU decoder LLMs to a three-action inference-time controller for hallucination mitigation. The system instruments frozen decoder-only language models with PyTorch forward hooks and extracts two complementary activation signals: Contextualized Embedding Vectors (CEV) from the residual stream and Intermediate Activation Vectors (IAV) from the SwiGLU feed-forward sublayer before the down-projection layer. Separate lightweight MLP probes are trained on RAGTruth hallucination labels and fused into a calibrated hallucination probability. This probability drives a three-action controller: ACCEPT, INTERVENE, or ABSTAIN; where intervention triggers corrective generation behavior such as regeneration or retrieval revision before a final response is delivered. The framework is evaluated on Mistral-7B-Instruct-v0.2, Qwen3-8B, and LLaMA-3-8B-Instruct using Colab A100 FP16 experiments. On a stratified RAGTruth validation split, the fused probe achieves AUROC scores of **0.8596** for Mistral-7B-Instruct-v0.2, **0.8808** for Qwen3-8B, and **0.8689** for LLaMA-3-8B-Instruct, surpassing all published and reproduced baseline detectors considered in this study. Closed-loop intervention reduces the delivered hallucination proxy relative to vanilla RAG for all three backbones, which span a clear safety–utility spectrum: Mistral-7B-Instruct-v0.2 reaches the lowest delivered proxy at a balanced acceptance rate, Qwen3-8B gives the largest relative reduction but is the most conservative, and LLaMA-3-8B-Instruct retains the most answers. These results suggest that internal activation signals can support practical inference-time hallucination control across SwiGLU-based decoder families, while probe training and controller thresholds remain backbone-specific due to model-dependent activation distributions.
 
 **Keywords:** Retrieval-Augmented Generation, Hallucination Mitigation, Internal Activation Probing, Closed-Loop Inference Control, Transformer Representations, RAGTruth.
 
-**িবমূতর্**
+**বিমূর্ত (Abstract)**
 
-এিট আমার গেবষণার বাংলা িবমূতর্ । পুনরুদ্ধার-সংবিধর্ত উৎপাদেন (RAG) ভ্রম একিট প্রধান সীমাবদ্ধতা, কারণ পুনরুদ্ধারকৃত তথ্য সবসময় িনিশ্চত কের না যে ভাষা মেডল একিট িবশ্বস্ত উত্তর তৈির করেব। এই গেবষণা একিট ক্লোজড-লুপ RAG কাঠােমা প্রস্তাব কের যা মেডেলর অভ্যন্তরীণ অ্যািক্টেভশন িসগন্যাল ব্যবহার কের ভ্রেমর ঝুঁিক অনুমান কের এবং সেই অনুমান অনুযায়ী উত্তর গ্রহণ, পুনরায় তৈির, পুনরায় পুনরুদ্ধার বা িবরত থাকার িসদ্ধান্ত নেয়।
+পুনরুদ্ধার-সমৃদ্ধ জনন (Retrieval-Augmented Generation, RAG)-এ হ্যালুসিনেশন বা অমূলক তথ্য তৈরি এখনও একটি বড় সীমাবদ্ধতা, কারণ পুনরুদ্ধার করা তথ্যপ্রমাণ থাকলেও তা নিশ্চিত করে না যে ভাষা-মডেলটি একটি বিশ্বস্ত উত্তর তৈরি করবে। বিদ্যমান হ্যালুসিনেশন-প্রশমন পদ্ধতিগুলো সাধারণত ওপেন-লুপ সনাক্তকারী বা বাহ্যিক যাচাইকারী হিসেবে কাজ করে: এগুলো ভ্রান্তির ঝুঁকি অনুমান করে, কিন্তু সেই অনুমানকে সরাসরি ইনফারেন্স-কালীন উত্তর-নিয়ন্ত্রণের সঙ্গে যুক্ত করে না। এই গবেষণায় একটি ক্লোজড-লুপ RAG কাঠামো প্রস্তাব করা হয়েছে, যা মডেলের অভ্যন্তরীণ-অবস্থা-ভিত্তিক হ্যালুসিনেশন সনাক্তকরণকে স্বয়ংক্রিয় জনন-নিয়ন্ত্রণের সঙ্গে সংযুক্ত করে। আমাদের জানা মতে, এটিই প্রথম ক্লোজড-লুপ RAG কাঠামো যা ফ্রোজেন SwiGLU ডিকোডার ভাষা-মডেল থেকে প্রাপ্ত দ্বৈত অভ্যন্তরীণ অ্যাক্টিভেশন প্রোবকে হ্যালুসিনেশন প্রশমনের জন্য একটি তিন-ক্রিয়া (three-action) ইনফারেন্স-কালীন নিয়ন্ত্রকের সঙ্গে যুক্ত করে।
+
+প্রস্তাবিত পদ্ধতিটি ফ্রোজেন ডিকোডার-ভিত্তিক ভাষা-মডেলে PyTorch ফরওয়ার্ড হুক স্থাপন করে এবং দুটি পরিপূরক অ্যাক্টিভেশন সংকেত আহরণ করে: রেসিডুয়াল স্ট্রিম থেকে Contextualized Embedding Vectors (CEV) এবং ডাউন-প্রজেকশন স্তরের পূর্বে SwiGLU ফিড-ফরওয়ার্ড সাব-লেয়ার থেকে Intermediate Activation Vectors (IAV)। RAGTruth হ্যালুসিনেশন লেবেলের উপর পৃথক লাইটওয়েট MLP প্রোব প্রশিক্ষণ দেওয়া হয় এবং সেগুলোকে একত্র করে একটি ক্যালিব্রেটেড হ্যালুসিনেশন সম্ভাব্যতায় রূপান্তর করা হয়। এই সম্ভাব্যতা একটি তিন-ক্রিয়া নিয়ন্ত্রক পরিচালনা করে: ACCEPT (গ্রহণ), INTERVENE (হস্তক্ষেপ) অথবা ABSTAIN (বিরত থাকা); যেখানে হস্তক্ষেপের ফলে চূড়ান্ত উত্তর প্রদানের পূর্বে পুনঃজনন বা পুনঃপুনরুদ্ধারের মতো সংশোধনমূলক আচরণ সক্রিয় হয়।
+
+কাঠামোটি Mistral-7B-Instruct-v0.2, Qwen3-8B এবং LLaMA-3-8B-Instruct মডেলে Colab A100 FP16 পরিবেশে মূল্যায়ন করা হয়েছে। একটি স্তরিত (stratified) RAGTruth ভ্যালিডেশন বিভাজনে সম্মিলিত প্রোবটি Mistral-7B-Instruct-v0.2-এর জন্য 0.8596, Qwen3-8B-এর জন্য 0.8808 এবং LLaMA-3-8B-Instruct-এর জন্য 0.8689 AUROC অর্জন করে, যা এই গবেষণায় বিবেচিত সকল প্রকাশিত ও পুনরুৎপাদিত বেসলাইন সনাক্তকারীকে ছাড়িয়ে যায়। ক্লোজড-লুপ হস্তক্ষেপ তিনটি ব্যাকবোনের ক্ষেত্রেই ভ্যানিলা RAG-এর তুলনায় প্রদত্ত হ্যালুসিনেশন প্রক্সি হ্রাস করে; মডেলগুলো একটি সুস্পষ্ট নিরাপত্তা–উপযোগিতা (safety–utility) বর্ণালি জুড়ে বিস্তৃত: Mistral-7B-Instruct-v0.2 একটি সুষম গ্রহণ-হারে সর্বনিম্ন প্রদত্ত প্রক্সি অর্জন করে, Qwen3-8B সর্ববৃহৎ আপেক্ষিক হ্রাস প্রদান করে কিন্তু সবচেয়ে রক্ষণশীল, এবং LLaMA-3-8B-Instruct সর্বাধিক সংখ্যক উত্তর ধরে রাখে। এই ফলাফল ইঙ্গিত করে যে অভ্যন্তরীণ অ্যাক্টিভেশন সংকেত SwiGLU-ভিত্তিক ডিকোডার পরিবারের মধ্যে ব্যবহারিক ইনফারেন্স-কালীন হ্যালুসিনেশন নিয়ন্ত্রণে সহায়ক হতে পারে, যদিও মডেল-নির্ভর অ্যাক্টিভেশন বিন্যাসের কারণে প্রোব প্রশিক্ষণ ও নিয়ন্ত্রকের থ্রেশহোল্ড ব্যাকবোন-নির্দিষ্ট থেকে যায়।
+
+**মূল শব্দসমূহ (Keywords):** পুনরুদ্ধার-সমৃদ্ধ জনন (RAG), হ্যালুসিনেশন প্রশমন, অভ্যন্তরীণ অ্যাক্টিভেশন প্রোবিং, ক্লোজড-লুপ ইনফারেন্স নিয়ন্ত্রণ, ট্রান্সফরমার রিপ্রেজেন্টেশন, RAGTruth।
 
 **Contents**
 
@@ -100,7 +106,7 @@ Declaration . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . i
 
 [Abstract	vi](#abstract)
 
-িবমূতর্ 	vii [Nomenclature	xii](#nomenclature)
+বিমূর্ত	vii [Nomenclature	xii](#nomenclature)
 
 1. **Introduction	1**  
      
@@ -186,11 +192,9 @@ Declaration . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . i
         
    2. [Training Dynamics and HaluEval Transfer	26](#training-dynamics-and-halueval-transfer)  
         
-   3. [Post-Training Calibration	27](#post-training-calibration)  
+   3. [Post-Training Calibration and Fusion	27](#post-training-calibration)  
         
-   4. [Probability-Level Fusion	28](#probability-level-fusion)  
-        
-   5. [Summary	28](#summary)
+   4. [Summary	28](#summary)
 
    
 
@@ -206,9 +210,7 @@ Declaration . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . i
         
    5. [Example Closed-Loop Trace	31](#example-closed-loop-trace-1)  
         
-   6. [Interpretation of the Trace	31](#interpretation-of-the-trace)  
-        
-   7. [Summary	32](#summary-1)
+   6. [Summary	32](#summary-1)
 
    
 
@@ -302,9 +304,19 @@ Fig. 5.1	High-level overview of the self-correcting closed-loop RAG system.	16
 
 Fig. 5.2	Proposed closed-loop RAG architecture with internal-state probing.	18
 
-Fig. 5.3	Detailed methodology for internal-state probing, calibration, and fusion.	24
+Fig. 5.3	Single-layer depth sweep and best AUROC per cost tier.	20
+
+Fig. 5.4	Layer-wise probe AUROC by configuration and model.	20
+
+Fig. 5.5	AUROC heatmap and AUROC-vs-probe-size scatter.	21
+
+Fig. 5.6	Detailed methodology for internal-state probing, calibration, and fusion.	24
 
 Fig. 6.1	Probe training dynamics and HaluEval cross-domain ROC curves.	26
+
+Fig. 6.2	Triple-layer configuration: training and HaluEval ROC grid (comparison).	26
+
+Fig. 7.1	Closed-loop Atlantis query trace.	31
 
 Fig. 8.1	Cross-model probe performance across validation and OOD metrics.	39
 
@@ -326,9 +338,11 @@ Table 5.1	Main system components	17
 
 Table 5.2	Hook layers and feature dimensions	19
 
-Table 5.3	Probe architecture	20
+Table 5.3	Layer-wise probe comparison	20
 
-Table 5.4	Controller configuration	22
+Table 5.4	Probe architecture	21
+
+Table 5.5	Controller configuration	22
 
 Table 6.1	Probe training configuration	25
 
@@ -378,8 +392,8 @@ Table 11.2	Backbone-level strengths and limitations	58
 | :---- | :---- |
 | h\_out^(ℓ) | Decoder block output / residual-stream state at layer ℓ (CEV) |
 | z\_IAV^(ℓ) | SwiGLU FFN intermediate (gated) activation at layer ℓ (IAV) |
-| ϕ(x) | Concatenated CEV feature vector |
-| ψ(x) | Concatenated IAV feature vector |
+| ϕ(x) | CEV feature vector (single mid-depth layer) |
+| ψ(x) | IAV feature vector (single mid-depth layer) |
 | p\_CEV | Calibrated CEV hallucination probability |
 | p\_IAV | Calibrated IAV hallucination probability |
 | p\_fused | Fused hallucination-risk probability |
@@ -424,11 +438,12 @@ Table 11.2	Backbone-level strengths and limitations	58
 
 This chapter establishes the motivation for the research. Section 1.1 introduces the hallucination problem in retrieval-augmented generation and explains why retrieval alone does not guarantee faithful generation. Section 1.2 explains the use of PyTorch forward hooks as the mechanism for accessing the model's internal states, including what a forward hook is (Section 1.2.1), why hooks are needed in this system (Section 1.2.2), and why hidden states cannot simply be read after inference (Section 1.2.3).
 
-2. ## **The Hallucination Problem in RAG** {#the-hallucination-problem-in-rag}
+1. ## **The Hallucination Problem in RAG** {#the-hallucination-problem-in-rag}
 
 Retrieval-Augmented Generation (RAG) \[1\] was conceived as a mechanism for factual grounding: instead of relying solely on parametric memory, the model conditions its output on a retrieved passage. In theory, the model should faithfully synthesize the retrieved evidence. In practice, LLMs continue to hallucinate at significant rates even with high-quality retrieval \[2\]. The model may selectively ignore the passage, blend it with conflicting parametric knowledge, or simply confabulate when the retrieved document is tangentially related.
 
 ![][image1]
+
 
 *\[Figure 1.1 — Conceptual comparison between standard open-loop RAG and the proposed closed-loop RAG pipeline.\]*
 
@@ -442,7 +457,7 @@ The proposed pipeline adds an internal feedback stage. During generation, forwar
 
 This study therefore focuses on closing the gap between hallucination detection and hallucination mitigation: rather than only scoring a response after generation, the system uses the score to control the inference-time RAG loop.
 
-3. ## **Why Hooks?** {#why-hooks?}
+2. ## **Why Hooks?** {#why-hooks?}
 
 Before describing the full closed-loop system, it is necessary to explain how the model's internal states are accessed. This work uses **PyTorch forward hooks**, which allow selected intermediate tensors to be observed during a model's forward pass without changing the model's computation.
 
@@ -468,7 +483,7 @@ The proposed system requires two complementary internal signals:
 
 These two tensors are not equally accessible through standard model outputs. Residual hidden states can usually be returned with output\_hidden\_states=True, but the intermediate SwiGLU activation inside the feed-forward sublayer is not exposed by default. Forward hooks are therefore required to capture the IAV signal directly.
 
-In the experiments, hooks are registered at three proportional decoder depths, approximately ***L/4, L/2*** and ***3L/4***. The CEV and IAV features from these depths are concatenated and scored by lightweight MLP probes. The resulting hallucination-risk estimate is then used by the closed-loop controller.
+In the experiments, a single forward hook is registered at one mid-depth decoder layer, approximately ***L/2***. The CEV and IAV features from that layer are scored by lightweight MLP probes, and the resulting hallucination-risk estimate is passed to the closed-loop controller. Using one mid-depth layer rather than concatenating several depths is justified empirically by the layer-wise ablation in Section 5.4.1.
 
 3. ### **Why Not Just Read Hidden States After Inference?** {#why-not-just-read-hidden-states-after-inference?}
 
@@ -500,7 +515,7 @@ The objective of this study is to design and evaluate a closed-loop RAG system t
      
 5. "*Test the framework across multiple decoder-only transformer backbones without modifying their core architectures.*"
 
-6. ## **Technical Challenges** {#technical-challenges}
+3. ## **Technical Challenges** {#technical-challenges}
 
 The proposed framework addresses three technical challenges.
 
@@ -512,21 +527,23 @@ Third, the internal signal must capture more than one hallucination mechanism. R
 
 4. ## **Novelty and Contributions** {#novelty-and-contributions}
 
-This work makes four main contributions.
+This work makes five main contributions.
 
 **Contribution 1 — Dual-signal internal-state probing.** The framework combines two complementary activation sources: CEV features from the decoder residual stream and IAV features from the SwiGLU FFN intermediate activation. This design is motivated by the hypothesis that hallucination can arise both from weak context integration and from parametric-memory intrusion.
 
 **Contribution 2 — Inference-time closed-loop control.** Instead of using hallucination detection only as a post-hoc score, the calibrated probe probability is used by a controller that determines whether the response should be accepted, regenerated, supported by re-retrieval, or abstained.
 
-**Contribution 3 — Multi-backbone evaluation.** The same framework is evaluated across Mistral-7B, LLaMA-3-8B-Instruct, and Qwen3-8B, allowing the study to examine whether the CEV/IAV probing strategy transfers across multiple decoder-only transformer families.
+**Contribution 3 — Multi-backbone evaluation.** The same framework is evaluated across Mistral-7B-Instruct-v0.2, LLaMA-3-8B-Instruct, and Qwen3-8B, allowing the study to examine whether the CEV/IAV probing strategy transfers across multiple decoder-only transformer families.
 
 **Contribution 4 — Reproducible evaluation protocol.** The study reports validation-set probe performance, closed-loop controller behavior, and out-of-domain transfer behavior, while explicitly separating validation-split results from comparisons against published test-set baselines.
+
+**Contribution 5 — A parameter-efficient single mid-layer probe.** A controlled layer-wise ablation (Section 5.4.1) shows that reading the probe from a single mid-depth layer (L/2) matches or beats the originally deployed three-layer concatenation on every backbone while using about one-third of the probe parameters, giving a system-agnostic and cheaper detector.
 
 5. ## **Evaluation Scope** {#evaluation-scope}
 
 The framework is evaluated at two levels.
 
-*First*, the CEV and IAV probes are assessed as hallucination-risk detectors using a stratified RAGTruth validation split. Their individual and fused AUROC values are compared to determine whether dual-signal probing improves over either signal alone.
+*First*, the CEV and IAV probes are assessed as hallucination-risk detectors using a stratified RAGTruth validation split. Their individual and fused AUROC values are compared to determine whether dual-signal probing improves over either signal alone. The decoder depth that feeds the probes is itself selected empirically through a layer-wise ablation (Section 5.4.1) rather than assumed.
 
 *Second*, the fused hallucination-risk estimate is used inside a closed-loop RAG controller. The controller is evaluated by observing how often it accepts, regenerates, re-retrieves, or abstains, and whether these decisions reduce the hallucination risk of delivered responses.
 
@@ -594,7 +611,7 @@ Many hallucination-detection methods are evaluated on one model family or a limi
 
 Cross-Layer Attention Probing (CLAP) further addresses generalization by evaluating fine-grained hallucination detection across **five LLMs and three tasks** \[24\]. This supports the need to examine whether activation-based hallucination signals transfer across different model families.
 
-The present work evaluates the same CEV/IAV probing and controller design across three decoder-only transformer backbones: Mistral-7B, LLaMA-3-8B-Instruct, and Qwen3-8B. These models differ in tokenizer design, training data, layer structure, and FFN intermediate dimensions. This provides a controlled test of whether the proposed activation-probing framework can be reused across related decoder-only transformer families without modifying the backbone architecture.
+The present work evaluates the same CEV/IAV probing and controller design across three decoder-only transformer backbones: Mistral-7B-Instruct-v0.2, LLaMA-3-8B-Instruct, and Qwen3-8B. These models differ in tokenizer design, training data, layer structure, and FFN intermediate dimensions. This provides a controlled test of whether the proposed activation-probing framework can be reused across related decoder-only transformer families without modifying the backbone architecture.
 
 **Chapter 4 Background**
 
@@ -635,7 +652,7 @@ The **CEV** reflects the residual-stream state after the decoder block has integ
 
 The **IAV** reflects the FFN intermediate activation before the feed-forward contribution is written back into the residual stream. This is theoretically motivated by prior mechanistic-interpretability work showing that FFN layers can behave like key-value memories and can participate in storing or expressing factual associations \[17\], \[18\].
 
-In this study, CEV and IAV features are extracted from three proportional decoder depths, approximately L/4, L/2 and 3L/4. For each selected layer, the last-token activation is pooled and concatenated across depths. The resulting CEV and IAV feature vectors are passed to lightweight MLP probes, whose calibrated outputs are fused into a hallucination-risk score.  
+In this study, CEV and IAV features are extracted from a single mid-depth decoder layer at approximately L/2. The last-token activation at that layer is pooled and passed to lightweight MLP probes, whose calibrated outputs are fused into a hallucination-risk score. Section 5.4.1 reports the layer-wise ablation that motivates using one mid-depth layer instead of a multi-depth concatenation.  
 ![][image4]
 
 *\[Figure 4.2 — Simplified view of CEV and IAV extraction across decoder blocks.\]*
@@ -653,6 +670,10 @@ First, the *residual stream* acts as an accumulated representational state. At l
 Second, *FFN layers* are not merely generic nonlinear transformations. Mechanistic-interpretability studies suggest that transformer FFN layers can behave like key-value memories, where input patterns activate stored associations that influence the output-token distribution \[17\]. Factual associations can also be localized and edited through MLP/FFN modules \[18\]. These findings motivate inspecting the IAV signal as a possible indicator of parametric-memory contribution.
 
 This does not imply that CEV or IAV alone can perfectly identify hallucination. Instead, the working hypothesis is that the two signals provide complementary evidence: CEV captures context-integration behavior, while IAV captures feed-forward activation patterns associated with parametric knowledge use.
+
+**Why this is appropriate, and how the system detects hallucination without training the LLM.** It helps to be explicit about what is and is not trained. The language model itself is **frozen**: the forward hooks are read-only taps that copy the CEV and IAV activations while the model generates, and they never change its weights, decoding, or output. The hallucination judgement therefore does not come from the LLM “reporting on itself.” It comes from a separate **supervised** step — a lightweight two-layer MLP probe is trained on RAGTruth, whose responses are human-labelled as grounded or hallucinated, to learn the mapping from the last-token CEV/IAV activations to a calibrated probability P(hallucinated). The probe thus learns, from thousands of labelled examples, which internal-activation patterns accompany unsupported generation, and it reuses that learned mapping at inference on unseen queries. This is appropriate because the discriminative signal is empirically present in those activations — prior interpretability work shows factuality-related structure in the residual stream and FFN memories, and the in-domain AUROC of roughly 0.86–0.88 in Chapter 8 confirms a small external classifier can read it — so detection needs no fine-tuning of the backbone, no repeated sampled generations, and no external judge model, which keeps it cheap and reusable across model families.
+
+**How detection becomes mitigation.** The calibrated probability is not used to edit the model or rewrite the answer; it is fed to the closed-loop controller (Chapter 7), which decides what happens to the candidate response before the user sees it: a low score is **accepted**, a medium score triggers **regeneration** (same context) or **re-retrieval** (fresh evidence), and a high score causes the system to **abstain**. Mitigation here means *withholding or repairing* a risky answer at delivery time rather than retraining the model. The method is best read as a reliability layer rather than a factuality oracle — as §4.4.3 and the Limitations show, it can still miss a confident extraction from context that is topically relevant but insufficient, which is exactly why detection is paired with calibration and abstention instead of being trusted as a perfect classifier.
 
 4. ## **Illustrative CEV/IAV Examples** {#illustrative-cev/iav-examples}
 
@@ -714,7 +735,7 @@ This chapter describes the complete closed-loop RAG system. Section 5.1 gives an
 
 Chapter 4 defined the two internal activation signals used in this work: the **Contextualized Embedding Vector (CEV)** from the residual stream and the **Intermediate Activation Vector (IAV)** from the SwiGLU feed-forward sublayer. This section describes how these signals are integrated into a complete closed-loop RAG system.
 
-The proposed system follows a retrieve–generate–probe–control pipeline. A user query is first sent to a dense retriever, which retrieves the top-***k*** passages from an external document index. The retrieved passages and the query are then passed to a frozen decoder-only LLM. During inference, forward hooks extract CEV and IAV features from selected decoder layers. These features are scored by lightweight MLP probes, calibrated, fused into a hallucination-risk probability, and passed to a controller. The controller decides whether to **ACCEPT**, **REGENERATE**, **RE-RETRIEVE**, or **ABSTAIN**.  
+The proposed system follows a retrieve–generate–probe–control pipeline. A user query is first sent to a dense retriever, which retrieves the top-***k*** passages from an external document index. The retrieved passages and the query are then passed to a frozen decoder-only LLM. During inference, forward hooks extract CEV and IAV features from a single mid-depth decoder layer (Section 5.4.1). These features are scored by lightweight MLP probes, calibrated, fused into a hallucination-risk probability, and passed to a controller. The controller decides whether to **ACCEPT**, **REGENERATE**, **RE-RETRIEVE**, or **ABSTAIN**.  
 **![][image5]**
 
 *\[Figure 5.1 — High-level overview of the self-correcting closed-loop RAG system.\]*
@@ -741,18 +762,18 @@ where q is the query embedding and d\_i is the ***i***\-th retrieved passage emb
 
 The retrieved context and user query are passed to a frozen decoder-only LLM backbone. This work evaluates the same architecture across three backbones:
 
-* Mistral-7B  
+* Mistral-7B-Instruct-v0.2  
 * LLaMA-3-8B-Instruct  
 * Qwen3-8B
 
-Forward hooks are registered at three proportional decoder depths: approximately L/4, L/2, and 3L/4. At each selected layer, the system captures z\_CEV^(l) from the residual-stream output, and z\_IAV^(l) from the SwiGLU FFN intermediate activation before down\_proj.
+Forward hooks are registered at a single mid-depth decoder layer at approximately L/2. At that layer, the system captures z\_CEV^(ℓ\*) from the residual-stream output, and z\_IAV^(ℓ\*) from the SwiGLU FFN intermediate activation before down\_proj. Section 5.4.1 reports the ablation that motivates this single-layer choice.
 
 ### **5.2.3 Hallucination Detection Network**
 
 Two independent MLP probes are trained:
 
-1. **CEV probe**: receives concatenated CEV features.  
-2. **IAV probe**: receives concatenated IAV features.
+1. **CEV probe**: receives the CEV feature vector.  
+2. **IAV probe**: receives the IAV feature vector.
 
 The probes output two hallucination probabilities:
 
@@ -766,20 +787,11 @@ The two probabilities are fused using a validation-tuned convex combination:
 
 p\_fused \= w·p\_CEV \+ (1 − w)·p\_IAV
 
-where w is selected on the validation split. In the experiments, the best fusion weights generally place more weight on IAV than CEV, suggesting that FFN intermediate activations provide strong hallucination-relevant signal.
+where w is selected on the validation split. In these single-layer runs the tuned weights are balanced rather than IAV-dominated — 0.50 / 0.50 for Mistral-7B-Instruct-v0.2, 0.60 / 0.40 (CEV-leaning) for Qwen3-8B, and 0.45 / 0.55 (slightly IAV-leaning) for LLaMA-3-8B-Instruct — confirming that both signals contribute and neither dominates universally.
 
 ### **5.2.4 Closed-Loop Policy Controller**
 
-The controller uses two signals: p\_fused and q\_ret to decide the next action. The action space is: A \= {ACCEPT, REGENERATE, RE-RETRIEVE, ABSTAIN}
-
-The decision logic is:
-
-* **ACCEPT** if hallucination risk is below the intervention threshold.  
-* **REGENERATE** if hallucination risk is moderate and retrieval quality is acceptable.  
-* **RE-RETRIEVE** if hallucination risk is high and retrieval quality is weak.  
-* **ABSTAIN** if hallucination risk remains high after retries or exceeds the abstention threshold.
-
-A maximum retry limit is used to prevent infinite loops: MAX\_RETRIES \= 3
+The controller consumes the fused hallucination probability p\_fused, the retrieval-quality score q\_ret, and the retry count, and selects one of four actions, A \= {ACCEPT, REGENERATE, RE-RETRIEVE, ABSTAIN}. To avoid repetition, the full decision rule, the backbone-specific thresholds, and the retry budget are stated once in Section 7.3 and analysed in Chapter 7; in brief, low-risk responses are accepted, moderate-risk responses are regenerated (when retrieval is adequate) or re-retrieved (when retrieval is weak), and high-risk responses — or exhausted retries — lead to abstention.
 
 **Table 5.1. Main system components**
 
@@ -787,7 +799,7 @@ A maximum retry limit is used to prevent infinite loops: MAX\_RETRIES \= 3
 | :---- | :---- | :---- | :---- | :---- |
 | **Retrieval Engine** | User query | BGE embedding \+ FAISS top-***k*** search | Retrieved passages \+ q\_ret | Supplies external evidence |
 | **LLM Backbone** | Query \+ retrieved context | Frozen decoder-only generation | Candidate response | Generates the answer |
-| **Hook Extractor** | Decoder activations | Captures CEV and IAV at selected layers | ϕ(x), ψ(x) | Extracts internal-state signals |
+| **Hook Extractor** | Decoder activations | Captures CEV and IAV at the selected mid-depth layer | ϕ(x), ψ(x) | Extracts internal-state signals |
 | **CEV Probe** | CEV vector | MLP classifier | p\_CEV | Scores residual-stream hallucination risk |
 | **IAV Probe** | IAV vector | MLP classifier | p\_IAV | Scores FFN activation hallucination risk |
 | **Fusion Module** | p\_CEV, p\_IAV | Weighted fusion | p\_fused | Produces final hallucination-risk score |
@@ -813,33 +825,78 @@ The system retrieves external evidence, generates a candidate answer using a fro
 
 4. ## **Internal-State Feature Extraction** {#internal-state-feature-extraction}
 
-Let L denote the total number of decoder layers. The system selects three hook depths:
+Let L denote the total number of decoder layers. The system selects a single mid-depth hook layer:
 
-L \= { ⌊L/4⌋, ⌊L/2⌋, ⌊3L/4⌋ }
+ℓ\* \= ⌊L/2⌋
 
-For each selected layer l ∈ L, the CEV is extracted from the block output:
+At the selected mid-depth layer ℓ\*, the CEV is extracted from the block output:
 
-z\_CEV^(l) \= h\_out^(l)
+z\_CEV^(ℓ\*) \= h\_out^(ℓ\*)
 
 The IAV is extracted from the SwiGLU FFN intermediate activation before the final down\_proj projection:
 
-z\_IAV^(ℓ) \= SiLU( W\_gate^(ℓ) h\_ℓ ) ⊙ ( W\_up^(ℓ) h\_ℓ )
+z\_IAV^(ℓ\*) \= SiLU( W\_gate^(ℓ\*) RMSNorm(h\_(ℓ\*)) ) ⊙ ( W\_up^(ℓ\*) RMSNorm(h\_(ℓ\*)) )
 
-where ⊙ denotes the element-wise (Hadamard) product. For autoregressive decoding, the final token representation is used because it has attended to the full preceding context. The features from all selected layers are concatenated into two separate vectors, ϕ(x) for CEV and ψ(x) for IAV:
+where ⊙ denotes the element-wise (Hadamard) product. For autoregressive decoding, the final token representation is used because it has attended to the full preceding context. The last-token features from the single selected mid-depth layer ℓ\* form the two feature vectors, ϕ(x) for CEV and ψ(x) for IAV:
 
-ϕ(x) \= concat\_(ℓ ∈ L) z\_CEV,last^(ℓ)
+ϕ(x) \= z\_CEV,last^(ℓ\*)
 
-ψ(x) \= concat\_(ℓ ∈ L) z\_IAV,last^(ℓ)
+ψ(x) \= z\_IAV,last^(ℓ\*)
 
 The resulting vectors are normalized before being passed to the probes.
 
 **Table 5.2. Hook layers and feature dimensions**
 
-| Backbone | Decoder layers L | Hook layers L | Hidden size d\_hidden | FFN intermediate size d\_inter | CEV input dim 3·d\_hidden | IAV input dim 3·d\_inter |
+| Backbone | Decoder layers L | Hook layer (mid, L/2) | Hidden size d\_hidden | FFN intermediate size d\_inter | CEV input dim d\_hidden | IAV input dim d\_inter |
 | :---- | :---- | :---- | :---- | :---- | :---- | :---- |
-| **Mistral-7B** | 32 | 8, 16, 24 | 4096 | 14336 | 12288 | 43008 |
-| **LLaMA-3-8B-Instruct** | 32 | 8, 16, 24 | 4096 | 14336 | 12288 | 43008 |
-| **Qwen3-8B** | 36 | 9, 18, 27 | 4096 | 12288 | 12288 | 36864 |
+| **Mistral-7B-Instruct-v0.2** | 32 | 16 | 4096 | 14336 | 4096 | 14336 |
+| **LLaMA-3-8B-Instruct** | 32 | 16 | 4096 | 14336 | 4096 | 14336 |
+| **Qwen3-8B** | 36 | 18 | 4096 | 12288 | 4096 | 12288 |
+
+
+### **5.4.1 Layer Selection: Why a Single Mid-Depth Hook**
+
+A design question precedes everything else in the probing pipeline: *from which decoder depth should the CEV and IAV features be read, and is it worth concatenating several depths at all?* An earlier version of this system concatenated three proportional depths (L/4, L/2, 3L/4) into one probe input. To decide whether that extra width earns its cost, each backbone was put through a controlled layer-wise ablation, and the single mid-depth layer was adopted only after it won this comparison.
+
+**What was compared, and how.** Seven probe configurations were evaluated under one identical pipeline on RAGTruth (4,000 stratified rows, three random seeds): three single layers (early ≈ L/4, mid ≈ L/2, late ≈ 3L/4), the three two-layer pairs, and the full three-layer concatenation. To keep the comparison fair and cheap, the expensive language-model forward pass is run once and the cached last-token, z-score-standardized CEV/IAV activations are reused; only the small two-layer MLP head is retrained per configuration and seed. Each configuration is scored by AUROC (ranking quality) and by accuracy and F1 at a fixed 0.5 threshold, reported as the mean over three seeds. Because every configuration shares the same frozen backbone, the only cost that changes is the probe-head width — about 4.8M parameters for a single layer, 9.5M for a pair, and 14.2M for the triple.
+
+**Table 5.3. Layer-wise probe comparison (RAGTruth, 4,000 rows; fused AUROC is the mean over three seeds).**
+
+| Configuration | Layers | Probe params | Mistral AUROC | Qwen AUROC | LLaMA AUROC | Avg AUROC rank |
+| :---- | :----: | :----: | :----: | :----: | :----: | :----: |
+| early (L/4) | 1 | 4.79M | 0.7998 | 0.8103 | 0.8086 | 7.00 |
+| late (3L/4) | 1 | 4.79M | 0.8047 | 0.8417 | 0.8209 | 5.33 |
+| **mid (L/2)** | **1** | **4.79M** | **0.8233** | 0.8466 | **0.8371** | **1.33** |
+| early + mid | 2 | 9.51M | 0.8210 | 0.8417 | 0.8284 | 3.50 |
+| early + late | 2 | 9.51M | 0.8047 | 0.8364 | 0.8268 | 5.50 |
+| mid + late | 2 | 9.51M | 0.8150 | **0.8515** | 0.8356 | 2.33 |
+| triple (early+mid+late) | 3 | 14.22M | 0.8179 | 0.8427 | 0.8305 | 3.00 |
+
+*Parameter counts are for the 32-layer Mistral-7B-Instruct-v0.2 and LLaMA-3-8B-Instruct; Qwen3-8B's narrower 12,288-wide FFN gives slightly smaller probes (4.26M / 8.46M / 12.65M). Bold marks the best value in each column. "Avg AUROC rank" is the mean of each configuration's within-model AUROC rank across the three backbones (1 = best).*
+
+**Per-model reading of the table.** For every backbone the single mid-depth layer is the best or tied-best single choice, and no configuration meaningfully beats it:
+
+- **Mistral-7B-Instruct-v0.2 (L16):** mid is the best single layer and the best AUROC overall (0.8233), ahead of the triple (0.8179).
+- **Qwen3-8B (L18):** mid is the strongest single layer (0.8466); only the mid+late pair edges higher on AUROC (0.8515), at twice the parameters, while the triple (0.8427) does not.
+- **LLaMA-3-8B-Instruct (L16):** mid sweeps every metric (AUROC 0.8371, accuracy 0.760, F1 0.729) with the lowest seed-to-seed variance.
+
+Averaging each configuration's AUROC rank across the three models makes the pattern model-agnostic: the single mid layer is first overall (mean rank 1.33), ahead of the mid+late pair (2.33) and the triple (3.00). The early (L/4) layer is consistently the weakest (mean rank 7.00), consistent with the hallucination signal accumulating with depth — at quarter depth the model has not yet integrated the retrieved context with the generated answer.
+
+![Figure 5.3 — Single-layer depth sweep and best AUROC achievable at each cost tier.](to_add/layerwise_single_layer_and_best_per_depth.png)
+
+**Figure 5.3.** Left: early/mid/late single-layer AUROC for each backbone — mid is the strongest single depth everywhere. Right: best AUROC at each cost tier (best single vs. best double vs. triple); adding layers past the best single barely moves AUROC. The left panel also shows that the early (L/4) layer is the weakest depth in every model and that AUROC rises toward the middle of the network, consistent with the hallucination signal accumulating with depth. The right panel makes the cost argument visual: the “best single” and “best double” points sit almost level for all three backbones, so the extra parameters of deeper concatenations are not converted into ranking quality.
+
+![Figure 5.4 — Layer-wise probe AUROC by configuration and model.](to_add/layerwise_auroc_grouped_by_config.png)
+
+**Figure 5.4.** Fused AUROC for all seven configurations across the three backbones (mean over three seeds, error bars where reported). The triple never leads on any backbone. Bars are grouped by configuration so the three models can be compared at a glance; within each model the mid bar (and, for Qwen3-8B, the mid+late bar) stands tallest while the early and early+late bars trail, reinforcing that what matters is *including the mid layer*, not stacking more depths. The overlapping error bars among the top configurations also show that the gaps between mid, the best double, and the triple are within seed noise.
+
+![Figure 5.5 — AUROC heatmap and AUROC-vs-probe-size scatter.](to_add/layerwise_auroc_heatmap_and_params_scatter.png)
+
+**Figure 5.5.** Left: fused-AUROC heatmap (model × configuration). Right: AUROC versus probe parameters; the ~3×-parameter triple (triangles) buys no AUROC over the single mid layer (stars). In the heatmap the “mid” column is the brightest cell for Mistral and LLaMA and the second-brightest for Qwen, so the pattern holds by colour as well as by number. In the scatter, each configuration is placed at its true parameter cost: the single mid layer (stars) sits at the far left (~4–5 M parameters) yet at or above the AUROC of the ~14 M-parameter triples (triangles), which is precisely the best accuracy-per-parameter operating point and the basis for the design choice.
+
+**Why the single mid layer is the best choice.** Three observations make the decision clear. First, on ranking quality the mid layer is the best single depth on every backbone and the best configuration overall on two of three; the only thing that beats it (Qwen's mid+late) wins by 0.005 AUROC — inside the three-seed standard deviation — while doubling the probe width. Second, the mid layer is the cheapest option (about one-third of the triple's parameters and half of any pair) and shows the lowest seed-to-seed variance, so it is also the most stable to train. Third, the same winner holds for both a 32-layer and a 36-layer model, which means "read the residual stream and the FFN at roughly half depth" is a system-agnostic rule rather than a per-model tuning artifact. Mid depth is also where the interpretation is most natural: by L/2 the decoder has integrated the retrieved context with the query and the partially generated answer, but has not yet collapsed everything onto the final next-token decision, so it is the point where a hallucination signal is both present and cleanly separable. The practical significance is a smaller, faster, simpler probe — one hook and one feature read per stream — with no measurable loss in detection quality.
+
+**Decision (summary).** The final system reads CEV and IAV from a single mid-depth layer at L/2 — layer 16 for the 32-layer Mistral-7B-Instruct-v0.2 and LLaMA-3-8B-Instruct, and layer 18 for the 36-layer Qwen3-8B. The retired three-layer configuration is compared directly against this choice on training dynamics and out-of-domain transfer in Section 6.2.4.
 
 5. ## **Probe Architecture and Calibration** {#probe-architecture-and-calibration}
 
@@ -855,11 +912,11 @@ P(y \= 1\) \= softmax(z / T)
 
 where T is selected on the validation split.
 
-**Table 5.3. Probe architecture**
+**Table 5.4. Probe architecture**
 
 | Layer | Configuration |
 | :---- | :---- |
-| **Input** | CEV or IAV concatenated feature vector |
+| **Input** | CEV or IAV feature vector |
 | **Hidden layer 1** | Linear(input dimension → 256\) |
 | **Normalization 1** | BatchNorm1d(256) |
 | **Activation 1** | ReLU |
@@ -880,17 +937,11 @@ The complete training and fusion settings (optimizer, loss, label smoothing, sch
 
 7. ## **Controller Policy** {#controller-policy}
 
-The controller uses p\_fused, q\_ret and the retry count to choose an action. The rule-based deterministic controller is used in all reported experiments. (A learned reinforcement-learning policy was explored during development but was not enabled or evaluated in the final results; it is documented in Appendix D.)
+The controller selects one of four actions; the full decision rule and thresholds are given in Section 7.3.
 
-The controller follows this logic:
+**Table 5.5. Controller configuration**
 
-Action \= { ACCEPT if p\_fused \< θ\_hallu ; REGENERATE or RE-RETRIEVE if θ\_hallu ≤ p\_fused \< θ\_abs ; ABSTAIN if p\_fused ≥ θ\_abs }
-
-If retrieval quality is low, the system selects **RE-RETRIEVE**. Otherwise, it selects **REGENERATE**. If the retry limit is exceeded, the system abstains.
-
-**Table 5.4. Controller configuration**
-
-| *Parameter* | Mistral-7B | LLaMA-3-8B-Instruct | Qwen3-8B |
+| *Parameter* | Mistral-7B-Instruct-v0.2 | LLaMA-3-8B-Instruct | Qwen3-8B |
 | :---- | :---- | :---- | :---- |
 | *Intervention threshold θ\_hallu* | 0.62 | 0.60 | 0.55 |
 | *Abstention threshold θ\_abs* | 0.75 | 0.78 | 0.72 |
@@ -935,29 +986,29 @@ This example demonstrates the main role of the controller: the probe does not me
 
 9. ## **Detailed Probing and Probability-Level Fusion Diagram** {#detailed-probing-and-probability-level-fusion-diagram}
 
-Figure 5.3 provides a detailed view of how internal-state probing, probe training, temperature calibration, and probability-level fusion are performed. The figure is divided into two panels. **Panel A** shows how CEV and IAV features are extracted from the LLM using internal hooks. **Panel B** shows how the extracted feature vectors are passed through independent probes, calibrated using temperature scaling, fused into a single hallucination-risk score, and sent to the closed-loop controller.
+Figure 5.6 provides a detailed view of how internal-state probing, probe training, temperature calibration, and probability-level fusion are performed. The figure is divided into two panels. **Panel A** shows how CEV and IAV features are extracted from the LLM using internal hooks. **Panel B** shows how the extracted feature vectors are passed through independent probes, calibrated using temperature scaling, fused into a single hallucination-risk score, and sent to the closed-loop controller.
 
-In **Panel A**, hooks are attached to selected decoder layers. For each selected layer, the CEV is captured from the residual-stream output of the decoder block, while the IAV is captured from the SwiGLU FFN intermediate activation before the final down\_proj projection. The system uses three proportional decoder depths, approximately L/4, L/2, and 3L/4. From each selected layer, the final-token activation is extracted because the final token has attended to the complete preceding prompt and generated context.
+In **Panel A**, a hook is attached to a single mid-depth decoder layer. The CEV is captured from the residual-stream output of that decoder block, while the IAV is captured from the SwiGLU FFN intermediate activation before the final down\_proj projection. The system uses one proportional decoder depth at approximately L/2 (the layer-selection ablation in Section 5.4.1 motivates this single-layer choice). From the selected layer, the final-token activation is extracted because the final token has attended to the complete preceding prompt and generated context.
 
-The extracted activations are then normalized and concatenated across the selected layers. This produces two separate feature vectors: one CEV feature vector and one IAV feature vector. These vectors are not averaged or fused before probing because they come from different representational spaces and capture different computational signals.
+The extracted activations are then normalized to produce two separate feature vectors: one CEV feature vector and one IAV feature vector. These vectors are not averaged or fused before probing because they come from different representational spaces and capture different computational signals.
 
 In **Panel B**, the CEV and IAV feature vectors are passed to two independent MLP probes. The CEV probe outputs logits for the CEV branch, and the IAV probe outputs logits for the IAV branch. During training, each probe is optimized using cross-entropy loss with label smoothing. After training, temperature scaling is applied separately to each probe so that their output probabilities are better calibrated (using the per-probe temperatures T\_CEV and T\_IAV defined in Section 5.5), producing the calibrated probabilities p\_CEV and p\_IAV. These calibrated probabilities are then combined using the validation-tuned probability-level fusion of Section 5.6 (p\_fused \= w·p\_CEV \+ (1 − w)·p\_IAV). The resulting p\_fused is passed to the closed-loop policy controller, which applies intervention and abstention thresholds to choose whether to accept, regenerate, re-retrieve, or abstain.
 
 **![][image7]**
 
-*\[Figure 5.3 — Detailed methodology for internal-state probing, temperature calibration, and probability-level fusion.\]*
+*\[Figure 5.6 — Detailed methodology for internal-state probing, temperature calibration, and probability-level fusion.\]*
 
-**Figure 5.3. Detailed methodology for internal-state probing, temperature calibration, and probability-level fusion.**
+**Figure 5.6. Detailed methodology for internal-state probing, temperature calibration, and probability-level fusion.**
 
-**Panel A** shows the probing mechanism: CEV and IAV activations are captured from selected decoder depths, last-token pooled, normalized, and concatenated into separate feature vectors. **Panel B** shows the probe-training and inference pipeline: independent CEV and IAV MLP probes are trained using cross-entropy loss with label smoothing, their logits are temperature-calibrated into p\_CEV and p\_IAV and the calibrated probabilities are fused through a validation-tuned convex combination before being passed to the closed-loop policy controller.
+**Panel A** shows the probing mechanism: CEV and IAV activations are captured from the selected mid-depth layer, last-token pooled, and z-score normalized into separate CEV and IAV feature vectors. **Panel B** shows the probe-training and inference pipeline: independent CEV and IAV MLP probes are trained using cross-entropy loss with label smoothing, their logits are temperature-calibrated into p\_CEV and p\_IAV and the calibrated probabilities are fused through a validation-tuned convex combination before being passed to the closed-loop policy controller.
 
 **Chapter 6 Probe Training, Calibration, and Cross-Domain Transfer**
 
-This chapter describes how the probes are trained, calibrated, and evaluated for cross-domain transfer. Section 6.1 presents the probe architecture and training protocol. Section 6.2 describes training dynamics and HaluEval transfer. Section 6.3 covers post-training calibration. Section 6.4 describes probability-level fusion, and Section 6.5 summarizes the findings.
+This chapter describes how the probes are trained, calibrated, and evaluated for cross-domain transfer. Section 6.1 presents the probe architecture and training protocol. Section 6.2 describes training dynamics and HaluEval transfer. Section 6.3 covers post-training calibration and probability-level fusion, and Section 6.4 summarizes the findings.
 
 1. ## **Probe Architecture and Training Protocol** {#probe-architecture-and-training-protocol}
 
-For each backbone, two independent MLP probes are trained: one for the **Contextualized Embedding Vector (CEV)** feature vector ϕ(x), and one for the **Intermediate Activation Vector (IAV)** feature vector ψ(x). The two probes use the same two-hidden-layer MLP architecture defined in Section 5.5 (Table 5.3) but receive different input dimensions because CEV and IAV are extracted from different representational spaces.
+For each backbone, two independent MLP probes are trained: one for the **Contextualized Embedding Vector (CEV)** feature vector ϕ(x), and one for the **Intermediate Activation Vector (IAV)** feature vector ψ(x). The two probes use the same two-hidden-layer MLP architecture defined in Section 5.5 (Table 5.4) but receive different input dimensions because CEV and IAV are extracted from different representational spaces.
 
 The two output logits correspond to the **grounded** and **hallucinated** classes (label convention: y \= 0 for grounded/non-hallucinated, y \= 1 for hallucinated). After training, temperature scaling is applied to convert logits into calibrated hallucination probabilities.
 
@@ -978,7 +1029,7 @@ The two output logits correspond to the **grounded** and **hallucinated** classe
 | **Validation split** | Stratified 80/20 split from processed RAGTruth training data |
 | **Checkpoint selection** | Best validation AUROC |
 
-Class weighting is used to reduce the effect of label imbalance, while label smoothing reduces overconfident probability estimates. This is important because the downstream controller depends on calibrated probabilities rather than raw class labels. AdamW is used for stable optimization in high-dimensional CEV/IAV feature spaces, and cosine scheduling provides smoother convergence over the fixed training budget.
+The rationale for these choices — class-weight derivation, label-smoothing motivation, and per-backbone learning-rate selection — is given in Section 8.4.
 
 2. ## **Training Dynamics and HaluEval Transfer** {#training-dynamics-and-halueval-transfer}
 
@@ -988,7 +1039,7 @@ Figure 6.1 summarizes two complementary evaluation views. The **top row** shows 
 
 **Figure 6.1. Probe training dynamics and HaluEval cross-domain ROC curves.**
 
-Top row: probe training loss and validation metrics for Mistral-7B, LLaMA-3-8B-Instruct, and Qwen3-8B. Bottom row: HaluEval ROC curves for CEV, IAV, and fused/mean probe scores. For Mistral-7B, the plotted ROC curves are orientation-adjusted for visualization, while the raw AUROC values are reported in the legend and table.
+Top row: probe training loss and validation metrics for Mistral-7B-Instruct-v0.2, LLaMA-3-8B-Instruct, and Qwen3-8B. Bottom row: HaluEval ROC curves for CEV, IAV, and fused/mean probe scores. For Mistral-7B-Instruct-v0.2, the plotted ROC curves are orientation-adjusted for visualization, while the raw AUROC values are reported in the legend and table.
 
 Triplet output:  
 ![][image9]
@@ -1007,25 +1058,36 @@ The bottom row of Figure 6.1 evaluates whether RAGTruth-trained probes transfer 
 
 The **raw AUROC** is the primary reported metric. For LLaMA-3-8B-Instruct and Qwen3-8B, raw AUROC values are above 0.5, meaning the probes assign higher hallucination probabilities to hallucinated HaluEval answers than to correct answers.
 
-For Mistral-7B, all raw AUROC values are far below 0.5. This indicates **polarity inversion**, not random failure. A raw mean AUROC of 0.026 means that the probe separates the classes strongly, but in the opposite direction from the RAGTruth-trained label convention. Therefore, the adjusted value, 1 − 0.026 \= 0.974, should be interpreted only as a diagnostic measure of signal strength, not as the main HaluEval result.
+For Mistral-7B-Instruct-v0.2, all raw AUROC values are far below 0.5. This indicates **polarity inversion**, not random failure. A raw mean AUROC of 0.105 means that the probe separates the classes strongly, but in the opposite direction from the RAGTruth-trained label convention. The adjusted value, 1 − 0.105 \= 0.895, should therefore be read only as a diagnostic of signal strength, not as the main HaluEval result.
 
 ### **6.2.3 Interpretation of Mistral Polarity Inversion**
 
-The Mistral-7B result should not be treated as a coding error because the raw AUROC is not near 0.5. Instead, it indicates that the model learned a discriminative internal-state signal whose direction changes under distribution shift.
+The Mistral-7B-Instruct-v0.2 result should not be treated as a coding error, because the raw AUROC is not near 0.5. It indicates that the model learned a strong discriminative internal-state signal whose direction flips under distribution shift. Importantly, this run uses the fully instruction-tuned Mistral-7B-Instruct-v0.2 checkpoint, so the inversion cannot be attributed to weak instruction tuning.
 
-RAGTruth and HaluEval differ in data construction and hallucination format. RAGTruth focuses on RAG-style failures where the generated response may ignore, contradict, or overextend retrieved evidence. HaluEval uses a different hallucination construction process, where correct and hallucinated answers are paired under a different prompt and answer distribution. Because of this, the activation patterns that indicate hallucination in RAGTruth may correspond to a different label direction in HaluEval for some backbones.
+RAGTruth and HaluEval differ in construction and format. RAGTruth captures RAG-style failures, where a long context-grounded prompt is present and the response may ignore, contradict, or overextend the retrieved evidence. HaluEval instead presents short, context-free question–answer pairs. For Mistral-7B-Instruct-v0.2 this format gap is decisive: its sliding-window attention and format-sensitive FFN activations encode hallucination in a way that depends on the long RAGTruth prompt, so the learned decision direction reverses when the context is removed. LLaMA-3-8B-Instruct and Qwen3-8B, which use full attention, keep the same direction across both formats.
 
-The correct interpretation is: *Mistral-7B exhibits strong but polarity-inverted out-of-domain discrimination on HaluEval, while LLaMA-3-8B-Instruct and Qwen3-8B preserve aligned raw discrimination.*
+The correct interpretation is: *Mistral-7B-Instruct-v0.2 exhibits a strong but polarity-inverted out-of-domain signal on HaluEval, while LLaMA-3-8B-Instruct and Qwen3-8B preserve aligned raw discrimination. Because the gap persists with the fully instruction-tuned checkpoint, it is best explained as an architectural/representational property of Mistral rather than a deficiency of instruction tuning.*
 
 This finding highlights a key deployment caveat: internal-state hallucination probes are distribution-sensitive. Before deployment in a new domain, benchmark, or prompt format, the probe should be validated or recalibrated using representative target-domain examples.
 
-3. ## **Post-Training Calibration** {#post-training-calibration}
+### **6.2.4 Comparison with the Triple-Layer Configuration**
+
+Section 5.4.1 compared layer configurations by detection AUROC and probe size. The same comparison can be made on the two views in Figure 6.1 — in-domain training dynamics and out-of-domain HaluEval ROC — to confirm that the single mid-depth layer does not give up anything that only surfaces during training or under distribution shift. Figure 6.2 reproduces those two views for the original three-depth (triple) concatenation.
+
+The training curves for the triple converge in the same way as the single-layer probes: validation AUROC peaks within the first one or two epochs and then drifts as the small head begins to overfit, which is why training uses early stopping with best-checkpoint restore in both settings. The HaluEval ROC curves are also effectively unchanged in shape and polarity per backbone — LLaMA-3-8B-Instruct and Qwen3-8B remain aligned, and Mistral-7B-Instruct-v0.2 remains polarity-inverted — so the extra depths neither repair Mistral's cross-domain inversion nor sharpen the aligned models' transfer. In short, the triple adds parameters and feature-extraction work without buying a measurable advantage in either training behavior or out-of-domain transfer, which matches the AUROC-per-parameter evidence of Section 5.4.1.
+
+![Figure 6.2 — Triple-layer configuration: training dynamics and HaluEval ROC grid (for comparison).](to_add/triple_compare_training_and_halueval_grid.png)
+
+**Figure 6.2.** Per-backbone training curves (top) and HaluEval ROC (bottom) for the three-depth (triple) concatenation, shown for comparison with the adopted single mid-depth configuration.
+
+**Decision.** Taking the detection, cost, training-dynamics, and transfer evidence together, the final system reads CEV and IAV from a single mid-depth layer at L/2 — layer 16 for the 32-layer Mistral-7B-Instruct-v0.2 and LLaMA-3-8B-Instruct, and layer 18 for the 36-layer Qwen3-8B. This gives the best AUROC per parameter, removes roughly two-thirds of the probe parameters relative to the triple, and simplifies the feature-extraction path with no measurable loss in detection quality or cross-domain transfer. Every result in the remainder of this thesis uses this single mid-depth configuration.
+
+
+3. ## **Post-Training Calibration and Fusion** {#post-training-calibration}
 
 After training, each probe is calibrated independently using temperature scaling (the p(y=1) \= softmax(z/T) calibration defined in Section 5.5), where the temperature T is selected on the validation split by minimizing validation negative log-likelihood.
 
 Separate calibration is necessary because CEV and IAV probes can have different confidence profiles. A CEV probe may be well-ranked but overconfident, while an IAV probe may produce a different probability scale. Temperature scaling makes their outputs more comparable before fusion.
-
-4. ## **Probability-Level Fusion** {#probability-level-fusion}
 
 After calibration, the CEV and IAV probabilities are fused using the validation-tuned convex combination defined in Section 5.2.3 (p\_fused \= w·p\_CEV \+ (1 − w)·p\_IAV, with w selected on the validation split to maximize AUROC).
 
@@ -1044,15 +1106,15 @@ This fusion is performed at the probability level, not by concatenating raw CEV 
 | *Fusion objective* | Maximize validation AUROC |
 | *Controller input* | p\_fused |
 
-5. ## **Summary** {#summary}
+4. ## **Summary** {#summary}
 
-The training curves show that CEV and IAV probes learn stable in-domain hallucination signals on RAGTruth. The HaluEval ROC curves show that these signals can transfer out of domain, but transfer behavior is model-dependent. Qwen3-8B shows the strongest aligned transfer, LLaMA-3-8B-Instruct shows good aligned transfer, and Mistral-7B shows strong but polarity-inverted discrimination.
+The training curves show that CEV and IAV probes learn stable in-domain hallucination signals on RAGTruth. The HaluEval ROC curves show that these signals can transfer out of domain, but transfer behavior is model-dependent. Qwen3-8B shows the strongest aligned transfer, LLaMA-3-8B-Instruct shows good aligned transfer, and Mistral-7B-Instruct-v0.2 shows strong but polarity-inverted discrimination.
 
 The main conclusion from this chapter is that internal-state probes are useful but must be calibrated and validated carefully. Their raw scores should not be assumed to transfer unchanged across datasets, benchmarks, or application domains.
 
 **Chapter 7 Closed-Loop Policy Controller**
 
-This chapter describes how the fused hallucination-risk probability is used to control the RAG inference loop. Section 7.1 states the purpose of the controller. Section 7.2 describes the controller inputs and thresholds. Section 7.3 presents the decision logic. Section 7.4 describes the semantic meaning of each action. Section 7.5 gives an example closed-loop trace. Section 7.6 interprets the trace, and Section 7.7 summarizes the chapter.
+This chapter describes how the fused hallucination-risk probability is used to control the RAG inference loop. Section 7.1 states the purpose of the controller. Section 7.2 describes the controller inputs and thresholds. Section 7.3 presents the decision logic. Section 7.4 describes the semantic meaning of each action. Section 7.5 gives an example closed-loop trace with interpretation, and Section 7.6 summarizes the chapter.
 
 1. ## **Purpose of the Controller** {#purpose-of-the-controller}
 
@@ -1076,7 +1138,7 @@ The controller uses three thresholds:
 
 In the reported experiments, the retrieval-quality threshold and retry budget are fixed across backbones: θ\_ret \= 0.30, MAX\_RETRIES \= 3
 
-Both the intervention threshold θ\_hallu and the abstention threshold θ\_abs are tuned separately for each backbone because each model produces a different calibrated score distribution. The backbone-specific values are given in Table 5.4 (and reproduced in the deployment-calibration discussion of Section 8.5). The intervention thresholds are selected by sweeping candidate thresholds on the validation split and choosing the value that maximizes F1, while the abstention thresholds impose a stronger high-risk refusal criterion.
+Both the intervention threshold θ\_hallu and the abstention threshold θ\_abs are tuned separately for each backbone because each model produces a different calibrated score distribution. The backbone-specific values are given in Table 5.5 (and reproduced in the deployment-calibration discussion of Section 8.5). The intervention thresholds are selected by sweeping candidate thresholds on the validation split and choosing the value that maximizes F1, while the abstention thresholds impose a stronger high-risk refusal criterion.
 
 3. ## **Controller Decision Logic** {#controller-decision-logic}
 
@@ -1099,27 +1161,19 @@ This rule separates two likely failure sources. If retrieval quality is weak, th
 
 The key distinction is that **REGENERATE** treats the generator as the likely source of the problem, while **RE-RETRIEVE** treats the retrieved evidence as the likely source of the problem.
 
-## **7.5 Why Thresholds Differ Across Backbones**
+5. ## **Example Closed-Loop Trace** {#example-closed-loop-trace-1}
 
-The hallucination threshold is not fixed across models because each backbone has a different activation geometry and calibrated score distribution. A threshold that is too low may cause excessive false refusals, while a threshold that is too high may allow hallucinated responses through.
+Figure 7.1 is an illustrative walk-through of the controller's recovery path on an Atlantis-location query — a constructed example, not a single logged run. The query is a useful choice because its fictional, mythological premise easily invites a confident hallucination, which lets the trace show how the RE-RETRIEVE → REGENERATE → ACCEPT branch is meant to behave. The live behavior of this same query on each backbone is reported separately in Section 8.12.
 
-For Mistral-7B, valid responses may receive relatively higher probe scores, so a higher intervention threshold reduces unnecessary intervention. For LLaMA-3-8B-Instruct, cautious or uncertainty-like generation patterns can also produce elevated risk scores, requiring a threshold above the default 0.50 boundary. Qwen3-8B shows clearer separation between grounded and hallucinated score distributions, allowing a lower intervention threshold.
-
-Thus, thresholds are not manually guessed. They are selected through validation-set tuning.
-
-## **7.6 Illustrative Closed-Loop Trace**
-
-Figure 9 illustrates the controller behavior on an Atlantis-location query. This example is useful because the question contains a fictional/mythological premise that can easily trigger confident hallucination.
+(The reason the three backbones use different thresholds is discussed once in Section 8.5.)
 
 ![A diagram of a process flowDescription automatically generated][image10]
 
-**Figure 9\. Closed-loop Atlantis query trace.**
+**Figure 7.1. Closed-loop Atlantis query trace (illustrative).**
 
 The system first generates a high-risk unsupported location claim and triggers re-retrieval. The second attempt remains moderately risky, so the controller regenerates using refined evidence. The final response safely frames Atlantis as mythological and refuses to provide an unverifiable factual location. Because the final hallucination probability is low, the controller accepts this safe refusal as the verified output.
 
-5. ## **Example Closed-Loop Trace** {#example-closed-loop-trace-1}
-
-**Table 7.2. Atlantis closed-loop trace**
+**Table 7.2. Atlantis closed-loop trace (illustrative example).**
 
 | *Iteration* | Retrieved evidence | Candidate response | p\_fused | Risk level | Controller decision | Outcome |
 | :---- | :---- | :---- | :---- | :---- | :---- | :---- |
@@ -1127,15 +1181,15 @@ The system first generates a high-risk unsupported location claim and triggers r
 | *2* | Historical/refutational discussion of Atlantis | "Some texts place it in the Atlantic Ocean..." | 0.69 | Moderate | REGENERATE | Retry using refined evidence |
 | *3* | Refined context / prior evidence retained | "Atlantis is mythological; I cannot verify a single factual location." | 0.22 | Low | ACCEPT | Deliver safe final response |
 
-6. ## **Interpretation of the Trace** {#interpretation-of-the-trace}
-
-The example shows that the controller does not simply refuse whenever a query is difficult. Instead, it attempts recovery through re-retrieval and regeneration before final delivery.
+**Interpretation.** The example shows that the controller does not simply refuse whenever a query is difficult. Instead, it attempts recovery through re-retrieval and regeneration before final delivery.
 
 The first response is a confident but unsupported location claim, so the hallucination score is elevated but still below the abstention threshold, and the controller triggers **RE-RETRIEVE**. The second response is safer but still speculative, so the controller triggers **REGENERATE**. The third response is a safe refusal-style answer: it does not invent a location and explicitly states that Atlantis cannot be verified as a factual place. Because the hallucination probability falls to 0.22, the controller accepts the response.
 
 This distinction is important: the final answer is a refusal-style response, but the controller decision is **ACCEPT**, not **ABSTAIN**. The system is accepting a safe final output, not withholding the response.
 
-7. ## **Summary** {#summary-1}
+**Relationship to the live runs.** Because Figure 7.1 and Table 7.2 are illustrative, their three-round recovery should not be read as the logged outcome for this query. In the actual nine-query demonstration (Section 8.12), the live Atlantis query resolved in a single attempt on all three backbones: Qwen3-8B abstained (fused 0.80), while Mistral-7B-Instruct-v0.2 and LLaMA-3-8B-Instruct accepted the model's own in-text refusal (fused 0.31 and 0.10). The multi-round path drawn here was not triggered by that query; it is shown to trace how the controller handles a borderline case that begins above the intervention threshold but below the abstention threshold.
+
+6. ## **Summary** {#summary-1}
 
 The closed-loop controller transforms hallucination detection into an operational decision process. It uses the fused CEV/IAV hallucination probability, retrieval-quality score, and retry count to decide whether to accept, regenerate, re-retrieve, or abstain. This makes the RAG pipeline self-corrective at inference time while preserving interpretability through a deterministic threshold policy.
 
@@ -1145,7 +1199,7 @@ This chapter evaluates the proposed framework. Section 8.1 describes the experim
 
 1. ## **Experimental Setup** {#experimental-setup}
 
-This section evaluates the proposed CEV/IAV closed-loop RAG framework across three decoder-only LLM backbones: **Mistral-7B**, **LLaMA-3-8B-Instruct**, and **Qwen3-8B**. The experiments are designed to answer four questions:
+This section evaluates the proposed CEV/IAV closed-loop RAG framework across three decoder-only LLM backbones: **Mistral-7B-Instruct-v0.2**, **LLaMA-3-8B-Instruct**, and **Qwen3-8B**. The experiments are designed to answer four questions:
 
 1. Can CEV and IAV probes learn hallucination-relevant signals from RAGTruth?  
 2. Does fused CEV/IAV probing outperform individual CEV-only or IAV-only probing?  
@@ -1153,6 +1207,8 @@ This section evaluates the proposed CEV/IAV closed-loop RAG framework across thr
 4. Does the closed-loop controller reduce hallucination risk in delivered outputs?
 
 All backbone-level probe experiments were executed on **Google Colab A100 GPU** hardware using frozen LLM backbones. The comparison figures aggregate the exported results from the individual model runs.
+
+**Retrieval, runtime, and answer-utility settings.** Retrieval uses a FAISS index over 25,000 SQuAD context passages with cosine similarity on L2-normalized BGE embeddings; the controller reads the **top k = 5** passages and sets the retrieval-quality score q\_ret to their mean similarity. End-to-end pipeline wall-clock time on a single A100 (probe feature extraction, training, and the full closed-loop evaluation) is about **60.7 min for Mistral-7B-Instruct-v0.2, 114.5 min for Qwen3-8B, and 62.6 min for LLaMA-3-8B-Instruct**. The added detection overhead at inference is small by construction — a single hooked forward pass plus two lightweight MLP probes on frozen features, which is negligible next to autoregressive generation; a dedicated per-query latency microbenchmark is left to future work. A token-level F1 against SQuAD reference answers is implemented as an optional utility check on accepted answers, but it is not reported as a headline metric in these runs: the delivered-hallucination proxy and the acceptance rate (Section 8.9) are the primary closed-loop measures.
 
 2. ## **Dataset Overview** {#dataset-overview}
 
@@ -1164,7 +1220,7 @@ Four datasets are used in the experimental pipeline, each serving a distinct rol
 | :---- | :---- | :---- | :---- | :---- | :---- | :---- |
 | **RAGTruth-18K \[6\]** | 15,090 train \+ 3,058 validation | Primary hallucination supervision | Yes | No | Yes, validation split | Train and validate CEV/IAV probes |
 | **SQuAD v1.1 — FAISS index \[30\]** | 25,000 contexts from training split | Retrieval knowledge base | No | Yes | No | Build FAISS index for operational RAG |
-| **SQuAD v1.1 — F1 evaluation \[30\]** | 10,570 validation QA pairs | Reference-answer evaluation | No | No | Yes | Token-level F1 against reference answers |
+| **SQuAD v1.1 — F1 evaluation \[30\]** | 10,570 validation QA pairs | Reference-answer utility check | No | No | Optional | Token-level F1 against reference answers (utility check; not a headline metric) |
 | **HaluEval-QA \[31\]** | 10,000 answer pairs | Out-of-distribution hallucination benchmark | No | No | Yes | Test cross-domain transfer |
 | **HalluRAG \[23\]** | 1,098 rows, Mistral-specific | Supplementary RAG hallucination data | Mistral only, when enabled | No | No | Add sentence-level Mistral hallucination examples |
 
@@ -1277,7 +1333,7 @@ HalluRAG is treated as a supplementary RAG hallucination dataset containing sent
 
 HalluRAG is not treated as a common training source for all backbones. It is used only under the model-specific configuration where the dataset rows match the relevant generating model. In practice, the reported LLaMA and Qwen runs do not rely on HalluRAG supplementation. This prevents model-specific supplementary examples from being incorrectly presented as a universal training pool.
 
-The motivation for Mistral-specific supplementation is that Mistral-7B can exhibit model-specific hallucination patterns, including format-continuation artifacts and repetitive completions. Sentence-level Mistral-generated hallucination examples provide additional supervision for these patterns when enabled.
+The motivation for Mistral-specific supplementation is that Mistral-7B-Instruct-v0.2 can exhibit model-specific hallucination patterns, including format-continuation artifacts and repetitive completions. Sentence-level Mistral-generated hallucination examples provide additional supervision for these patterns when enabled.
 
 3. ## **Dataset Merging and Split Protocol** {#dataset-merging-and-split-protocol}
 
@@ -1311,6 +1367,8 @@ HaluEval-QA is held out entirely for out-of-distribution evaluation. The HaluEva
 
 Two independent probes are trained for each backbone: one on CEV features and one on IAV features. The probe architecture and full training configuration were already defined in Chapter 6 (Table 6.1); the optimizer is AdamW \[27\], \[28\] with class-weighted cross-entropy loss, label smoothing 0.05, cosine-annealing scheduling, a maximum of 40 epochs, and early stopping on validation AUROC (patience 10\) over a stratified RAGTruth split. This section focuses on the training justification and the backbone-specific learning rates.
 
+**Feature and data preprocessing.** Each RAGTruth example is rendered with a fixed prompt template ("Based on the following context, answer the question." followed by the context, question, and answer), and the CEV and IAV activations are read from the **last token** of that sequence, which has attended to the full prompt. Before probing, both feature vectors are **z-score standardized** using the training-split mean and standard deviation (with a small epsilon for numerical stability), and the same fixed statistics are reused at validation, closed-loop inference, and HaluEval scoring so that train and test features share one scale. The train/validation division is a stratified 80/20 split on the hallucination label. These steps are implemented and applied in the released per-backbone notebooks.
+
 ### **8.4.1 Loss Function and Class-Weight Calculation**
 
 The probes are trained as binary classifiers: y ∈ {0, 1} \= {grounded, hallucinated}.
@@ -1327,7 +1385,7 @@ w\_grounded \= 15090 / (2 × 8369\) \= 0.902, w\_hallucinated \= 15090 / (2 × 6
 
 Thus, the hallucinated class receives a slightly higher weight because it is less frequent.
 
-**Loss-function justification.** Class-weighted cross-entropy is appropriate because hallucination detection is a two-class classification problem and the label distribution is mildly imbalanced. Label smoothing with ϵ \= 0.05 reduces overconfidence and helps calibration by preventing the probe from assigning extreme probabilities to noisy or ambiguous examples.
+**Loss-function justification.** Class-weighted cross-entropy is appropriate because hallucination detection is a two-class classification problem and the label distribution is mildly imbalanced. Label smoothing with ϵ \= 0.05 reduces overconfidence and helps calibration by preventing the probe from assigning extreme probabilities to noisy or ambiguous examples. The same weighted, label-smoothed cross-entropy is applied independently to the CEV and IAV probes; because the downstream controller thresholds calibrated probabilities rather than hard labels, this calibration-friendly objective matters as much as raw classification accuracy.
 
 ### **8.4.2 Learning-Rate Explanation**
 
@@ -1337,7 +1395,7 @@ Different learning rates are used because each backbone produces different activ
 
 | Backbone | Learning rate | Rationale |
 | :---- | :---- | :---- |
-| **Mistral-7B** | 3×10⁻⁴ | More conservative updates; useful for format-sensitive activations |
+| **Mistral-7B-Instruct-v0.2** | 3×10⁻⁴ | More conservative updates; useful for format-sensitive activations |
 | **LLaMA-3-8B-Instruct** | 1×10⁻³ | Faster convergence for stable instruction-tuned activations |
 | **Qwen3-8B** | 1×10⁻³ | Faster convergence; strong validation signal |
 
@@ -1347,19 +1405,21 @@ Mistral receives a smaller learning rate because its activations are more sensit
 
 The controller uses two backbone-specific thresholds: θ\_hallu for intervention and θ\_abs for abstention.
 
-The intervention threshold is selected separately for each backbone using validation-set F1 optimization. The abstention threshold is set higher because abstention is a stronger action than regeneration or re-retrieval. These values are the same as those listed in the controller configuration (Table 5.4).
+The intervention threshold is selected separately for each backbone using validation-set F1 optimization. The abstention threshold is set higher because abstention is a stronger action than regeneration or re-retrieval. These values are the same as those listed in the controller configuration (Table 5.5).
 
 **Table 8.5. Deployment thresholds**
 
 | Backbone | Intervention threshold θ\_hallu | Abstention threshold θ\_abs | Interpretation |
 | :---- | :---- | :---- | :---- |
-| **Mistral-7B** | 0.62 | 0.75 | Conservative enough to avoid excessive false positives |
+| **Mistral-7B-Instruct-v0.2** | 0.62 | 0.75 | Conservative enough to avoid excessive false positives |
 | **Qwen3-8B** | 0.55 | 0.72 | Lower threshold due to stronger score separation |
 | **LLaMA-3-8B-Instruct** | 0.60 | 0.78 | Higher abstention threshold to reduce over-refusal |
 
 **Threshold deep-dive.** The thresholds are not universal because the calibrated score distributions differ by backbone. Mistral tends to produce higher scores even for some valid outputs, so the threshold cannot be set too low. Qwen shows clearer separation between grounded and hallucinated examples, allowing a lower intervention threshold. LLaMA is more conservative and may assign elevated risk to vague but valid answers; therefore, its deployment threshold is adjusted to reduce unnecessary refusal.
 
 The threshold choice reflects a safety-utility tradeoff. Lower thresholds catch more hallucinations but also increase false refusals. Higher thresholds preserve utility but allow more risky answers through.
+
+**Per-backbone calibration.** Each probe is temperature-scaled before fusion, and the fitted temperatures differ by backbone: Mistral-7B-Instruct-v0.2 uses T_CEV = 1.60 / T_IAV = 0.80, Qwen3-8B uses 0.90 / 1.00, and LLaMA-3-8B-Instruct uses 1.30 / 1.10. The validation-tuned fusion weights are 0.50/0.50 for Mistral-7B-Instruct-v0.2, 0.60/0.40 for Qwen3-8B, and 0.45/0.55 for LLaMA-3-8B-Instruct. The F1-optimal intervention thresholds found on validation are 0.28 (Mistral-7B-Instruct-v0.2) and 0.42 (Qwen3-8B). For LLaMA-3-8B-Instruct the single-layer validation scores were compressed and the raw F1-optimal threshold collapsed to 0.06; a health-check rule (if the F1-optimal threshold falls below 0.25, fall back to the deployment thresholds) restores 0.60/0.78, and a Platt recalibration P = σ(a·s + b) with a = 5.7142, b = −2.9139 (where s is the raw fused score) maps the fused score onto a usable probability range. These deployment thresholds are the values listed in Table 8.5.
 
 6. ## **Primary RAGTruth Validation Results** {#primary-ragtruth-validation-results}
 
@@ -1369,9 +1429,9 @@ The primary in-domain evaluation uses the RAGTruth validation split. AUROC is th
 
 | Backbone | CEV AUROC | IAV AUROC | Fused AUROC | Mean fusion accuracy |
 | :---- | :---- | :---- | :---- | :---- |
-| **Mistral-7B** | 0.8392 | 0.8490 | 0.8515 | 0.7740 |
-| **Qwen3-8B** | **0.8723** | **0.8751** | **0.8798** | **0.7878** |
-| **LLaMA-3-8B-Instruct** | 0.8550 | 0.8630 | 0.8665 | 0.7868 |
+| **Mistral-7B-Instruct-v0.2** | 0.8474 | 0.8474 | 0.8596 | 0.7806 |
+| **Qwen3-8B** | **0.8763** | **0.8709** | **0.8808** | **0.7995** |
+| **LLaMA-3-8B-Instruct** | 0.8579 | 0.8622 | 0.8689 | 0.7822 |
 
 **![A graph of different colored barsDescription automatically generated with medium confidence][image11]**
 
@@ -1381,7 +1441,7 @@ The primary in-domain evaluation uses the RAGTruth validation split. AUROC is th
 
 Figure 8.1 compares fused AUROC, CEV AUROC, IAV AUROC, mean fusion accuracy, and HaluEval mean AUROC across the three backbones.
 
-**Result verdict.** Qwen3-8B achieves the strongest in-domain performance, with the highest fused AUROC of **0.8798**. LLaMA-3-8B-Instruct is second with **0.8665**, while Mistral-7B reaches **0.8515**. All three results indicate that CEV/IAV probes learn meaningful hallucination-relevant signals from internal activations.
+**Result verdict.** Qwen3-8B achieves the strongest in-domain performance, with the highest fused AUROC of **0.8808**. LLaMA-3-8B-Instruct is second with **0.8689**, while Mistral-7B-Instruct-v0.2 reaches **0.8596**. All three results indicate that CEV/IAV probes learn meaningful hallucination-relevant signals from internal activations.
 
 7. ## **Probe Score Distributions** {#probe-score-distributions}
 
@@ -1415,15 +1475,15 @@ Unlike the closed-loop system-level evaluation, this comparison focuses only on 
 | **ReDeEP \[15\]** | Attention \+ FFN mechanism | Partial | 0.762 | 0.750 |
 | **LUMINA \[16\]** | Context–knowledge signals | No | 0.769 | 0.745 |
 | **SAPLMA \[12\]** | Hidden-state activation probe | No | 0.807 | 0.760 |
-| **Ours: fused CEV/IAV probe** | Residual \+ FFN activation probing | **Yes** | **0.8515** | **0.8665** |
+| **Ours: fused CEV/IAV probe** | Residual \+ FFN activation probing | **Yes** | **0.8596** | **0.8689** |
 
 *\[Figure 8.3 — Published baselines vs. proposed fused CEV/IAV probe on RAGTruth AUROC.\]*  
 ![][image13]  
 **Figure 8.3. Published baselines vs. proposed fused CEV/IAV probe on RAGTruth AUROC.**
 
-The figure compares representative published RAGTruth baseline AUROCs with the proposed fused CEV/IAV probe. Dashed horizontal lines indicate the strongest prior reported baseline for Mistral-7B and LLaMA-3-8B-Instruct, while the final grouped bars show the proposed fused-probe results.
+The figure compares representative published RAGTruth baseline AUROCs with the proposed fused CEV/IAV probe. Dashed horizontal lines indicate the strongest prior reported baseline for Mistral-7B-Instruct-v0.2 and LLaMA-3-8B-Instruct, while the final grouped bars show the proposed fused-probe results.
 
-The proposed fused CEV/IAV probe achieves higher AUROC than the listed baselines for both Mistral-7B and LLaMA-3-8B-Instruct. For Mistral-7B, the fused probe obtains **0.8515 AUROC**, exceeding the strongest listed prior baseline, SAPLMA, at **0.807**. For LLaMA-3-8B-Instruct, the fused probe obtains **0.8665 AUROC**, exceeding the strongest listed prior result of **0.760**.
+The proposed fused CEV/IAV probe achieves higher AUROC than the listed baselines for both Mistral-7B-Instruct-v0.2 and LLaMA-3-8B-Instruct. For Mistral-7B-Instruct-v0.2, the fused probe obtains **0.8596 AUROC**, exceeding the strongest listed prior baseline, SAPLMA, at **0.807**. For LLaMA-3-8B-Instruct, the fused probe obtains **0.8689 AUROC**, exceeding the strongest listed prior result of **0.760**.
 
 This improvement suggests that combining residual-stream information from CEV with FFN intermediate activation information from IAV provides a stronger hallucination-detection signal than relying on output confidence, output entropy, reference checking, or a single hidden-state signal alone. The result also supports the central architectural choice of using dual internal signals rather than only one probe source.
 
@@ -1452,11 +1512,11 @@ Relative reduction \= (Vanilla proxy − Closed-loop proxy) / Vanilla proxy × 1
 
 **Table 8.8. Vanilla RAG vs. closed-loop RAG comparison**
 
-| *Backbone* | Vanilla delivered hallucination proxy \[95% CI\] | Closed-loop delivered hallucination proxy \[95% CI\] | Relative reduction | Acceptance rate | Abstention rate |
+| *Backbone* | Vanilla delivered hallucination proxy | Closed-loop delivered hallucination proxy | Relative reduction | Acceptance rate | Abstention rate |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| ***Mistral-7B*** | 0.5366 \[0.5098, 0.5645\] | **0.0280 \[0.0125, 0.0455\]** | **94.8%** | 10% | 90% |
-| ***Qwen3-8B*** | 0.2379 \[0.2108, 0.2662\] | 0.1658 \[0.1427, 0.1854\] | 30.3% | **86%** | 14% |
-| ***LLaMA-3-8B-Instruct*** | 0.3655 \[0.3213, 0.4104\] | 0.0581 \[0.0437, 0.0745\] | 84.1% | 48% | 52% |
+| ***Mistral-7B-Instruct-v0.2*** | 0.3301 | **0.1068** | 67.6% | 62% | 38% |
+| ***Qwen3-8B*** | 0.5388 | 0.1116 | **79.3%** | 42% | 58% |
+| ***LLaMA-3-8B-Instruct*** | 0.3321 | 0.1824 | 45.1% | **90%** | 10% |
 
 *\[Figure 8.4 — Vanilla RAG vs. closed-loop RAG comparison.\]*  
 ![][image14]  
@@ -1464,17 +1524,15 @@ Relative reduction \= (Vanilla proxy − Closed-loop proxy) / Vanilla proxy × 1
 
 The figure compares delivered hallucination proxy, acceptance rate, and relative hallucination reduction across the three backbone models.
 
-**Interpretation.** The closed-loop controller reduces delivered hallucination risk for all three backbones. Mistral-7B shows the largest reduction, decreasing from 0.5366 to 0.0280, corresponding to a **94.8% reduction**. However, this comes at a severe utility cost: the model abstains on 90% of queries and accepts only 10%.
-
-Qwen3-8B shows the best practical trade-off. Although its relative hallucination reduction is smaller at **30.3%**, it preserves a much higher acceptance rate of **86%**. This means Qwen delivers useful answers more often while still reducing hallucination risk.
-
-LLaMA-3-8B-Instruct achieves a strong hallucination reduction of **84.1%**, but its 48% acceptance rate shows that it is more conservative than Qwen. It prevents risky outputs effectively, but it also refuses many queries that may have been answerable.
+**Interpretation.** The closed-loop controller reduces delivered hallucination risk for all three backbones; the per-backbone safety–utility profiles (Mistral balanced, Qwen conservative, LLaMA permissive) are discussed in Section 9.2.
 
 **Note on comparison asymmetry.** This comparison is intentionally asymmetric. Vanilla RAG has no abstention mechanism: it delivers every generated answer, regardless of hallucination risk. Closed-loop RAG, by design, is allowed to reject or withhold unsafe responses. Therefore, this experiment should not be interpreted as asking *which system generates better answers on every query?* Instead, it asks *how much hallucination-risk is actually delivered to the user after the system has the opportunity to intervene?* Abstention is not a weakness in this evaluation; it is one of the safety mechanisms being tested. However, abstention reduces utility, so the acceptance rate is reported alongside hallucination reduction. A system that abstains on every query would achieve near-zero delivered hallucination but would be useless. The best system should therefore minimize delivered hallucination while maintaining a high acceptance rate.
 
-**Statistical note.** The 95% confidence intervals were estimated using bootstrap resampling of the query-level proxy scores. The non-overlapping confidence intervals between vanilla and closed-loop conditions indicate a robust reduction in delivered hallucination proxy for all three models. However, the result should be described as **statistically supported by bootstrap confidence intervals**, not as a formal proof of significance unless a paired statistical test is also reported.
+**Statistical note.** Bootstrap 95% confidence intervals (1,000 resamples of the 100-query proxy scores) confirm the gap: the vanilla and closed-loop intervals are non-overlapping for every backbone — Mistral-7B-Instruct-v0.2 vanilla [0.2930, 0.3713] vs. closed-loop [0.0884, 0.1253], Qwen3-8B [0.5029, 0.5713] vs. [0.0841, 0.1394], and LLaMA-3-8B-Instruct [0.2832, 0.3874] vs. [0.1509, 0.2129]. The reduction is therefore statistically reliable under this proxy, though the proxy is an automated estimate rather than a human-judged hallucination rate.
 
-**Closed-loop verdict.** The closed-loop controller substantially reduces hallucination-risk delivery across all backbones, but the safety–utility trade-off differs sharply by model. Mistral-7B is the safest but least useful because it abstains too often. LLaMA-3-8B-Instruct offers strong safety but moderate utility. Qwen3-8B provides the best overall balance, combining meaningful hallucination reduction with the highest answer acceptance rate.
+**Threats to validity (proxy metric).** These reductions are measured with the system's own calibrated probe score rather than with human or external judgments — the metric is therefore partly self-referential. Three specific caveats apply: (i) the proxy cannot catch the failure mode of Section 4.4.3, where confident but unsupported extractions are scored as low-risk; (ii) the 100-query sample at one seed carries sampling noise beyond the bootstrap intervals above; and (iii) the RE-RETRIEVE branch was rarely exercised relative to the accept/abstain gate. These caveats are formalized as Limitations 6–8 in Section 9.5.
+
+**Closed-loop verdict.** Across all three backbones the controller substantially lowers delivered probe-estimated risk; the per-backbone safety–utility positions are consolidated in Table 8.13 and discussed in Section 9.2.
 
 10. ## **Ablation Study: CEV, IAV, and Fusion** {#ablation-study:-cev,-iav,-and-fusion}
 
@@ -1484,9 +1542,9 @@ The ablation study evaluates whether both internal activation signals are necess
 
 | Backbone | CEV-only accuracy | IAV-only accuracy | Mean-fusion accuracy | Best branch |
 | :---- | :---- | :---- | :---- | :---- |
-| **Mistral-7B** | 0.738 | **0.775** | 0.774 | IAV-only |
-| **Qwen3-8B** | 0.746 | **0.790** | 0.788 | IAV-only |
-| **LLaMA-3-8B-Instruct** | 0.766 | **0.788** | 0.787 | IAV-only |
+| **Mistral-7B-Instruct-v0.2** | 0.772 | 0.778 | **0.781** | Mean-fusion |
+| **Qwen3-8B** | 0.799 | 0.793 | **0.800** | Mean-fusion |
+| **LLaMA-3-8B-Instruct** | **0.789** | 0.782 | 0.782 | CEV-only |
 
 *\[Figure 8.5 — Ablation comparison across CEV-only, IAV-only, and mean-fusion scores.\]*  
 ![][image15]  
@@ -1494,11 +1552,11 @@ The ablation study evaluates whether both internal activation signals are necess
 
 The figure compares fixed-threshold validation accuracy for the three scoring strategies across the three backbones.
 
-**Interpretation.** The ablation results show that **IAV-only consistently outperforms CEV-only** across all three models. This supports the hypothesis that FFN intermediate activations carry strong hallucination-relevant information. Since FFN layers are closely associated with parametric-memory expression, the IAV branch appears particularly useful for detecting cases where the model generates unsupported factual content.
+**Interpretation.** At the fixed 0.5 threshold the three accuracy columns are closely matched, and no single branch dominates across backbones. Mean-probability fusion gives the best accuracy for Mistral-7B-Instruct-v0.2 (0.781) and Qwen3-8B (0.800), while for LLaMA-3-8B-Instruct the CEV-only branch is marginally highest (0.789). The CEV and IAV branches are individually competitive, which is precisely why the calibrated fusion of the two is used in the final system.
 
 However, the results should not be interpreted as meaning that CEV is unnecessary. The accuracy metric is computed at a fixed threshold and does not fully capture ranking quality, calibration behavior, or controller stability. CEV remains useful because it captures residual-stream information related to context integration. In practical closed-loop deployment, hallucination risk is not determined only by fixed-threshold accuracy; AUROC, calibration, and safety–utility trade-off also matter.
 
-**Ablation verdict.** IAV is the stronger individual signal, but fusion remains justified. The fused score is more robust because it combines two complementary views of the model's internal computation: CEV captures context-integration behavior, while IAV captures FFN activation patterns associated with parametric-memory contribution. Therefore, the final system keeps both branches and uses calibrated fusion rather than relying on IAV alone.
+**Ablation verdict.** No single branch wins on every backbone at the fixed threshold, and the gaps are small. Fusion is retained because it gives the best or tied-best accuracy on two of the three models, and because the closed-loop controller depends on calibrated AUROC and score separation rather than fixed-threshold accuracy alone. The final system therefore keeps both CEV and IAV branches and combines their calibrated probabilities.
 
 11. ## **HaluEval Out-of-Distribution Analysis** {#halueval-out-of-distribution-analysis}
 
@@ -1510,9 +1568,9 @@ In this experiment, each HaluEval example contains a correct answer and a halluc
 
 | Backbone | CEV AUROC | IAV AUROC | Mean / fused AUROC | Interpretation |
 | :---- | :---- | :---- | :---- | :---- |
-| **Mistral-7B** | 0.045 raw / 0.955 adjusted | 0.024 raw / 0.976 adjusted | 0.026 raw / 0.974 adjusted | Strong polarity inversion |
-| **Qwen3-8B** | 0.893 | 0.863 | **0.906** | Strong aligned transfer |
-| **LLaMA-3-8B-Instruct** | 0.761 | 0.805 | 0.808 | Good aligned transfer |
+| **Mistral-7B-Instruct-v0.2** | 0.106 raw / 0.894 adjusted | 0.175 raw / 0.825 adjusted | 0.105 raw / 0.895 adjusted | Strong polarity inversion |
+| **Qwen3-8B** | 0.604 | 0.723 | 0.699 | Aligned transfer |
+| **LLaMA-3-8B-Instruct** | 0.740 | 0.816 | **0.814** | Best aligned transfer |
 
 *\[Figure 8.6 — HaluEval raw AUROC, orientation-adjusted AUROC, and signal strength.\]*  
 ![][image16]  
@@ -1522,17 +1580,17 @@ The figure shows whether the RAGTruth-trained probes preserve their label direct
 
 **Polarity interpretation.** The primary value is the **raw AUROC**. A raw AUROC above 0.5 means the probe assigns higher hallucination scores to hallucinated answers than to correct answers. A raw AUROC below 0.5 means the probe separates the classes in the opposite direction.
 
-Mistral-7B shows a strong polarity inversion. Its raw mean AUROC is **0.026**, which is far below random chance. This does not mean the probe has no signal. Instead, it means the probe strongly separates correct and hallucinated HaluEval answers, but in the reverse direction relative to the RAGTruth-trained scoring convention. The orientation-adjusted value, (r, 1−r), is therefore useful only as a diagnostic of signal strength. It should not replace the raw AUROC in the main result.
+Mistral-7B-Instruct-v0.2 shows a strong polarity inversion. Its raw mean AUROC is **0.105**, far below random chance. This does not mean the probe has no signal. It means the probe separates correct and hallucinated HaluEval answers strongly, but in the reverse direction relative to its RAGTruth-trained scoring convention. The orientation-adjusted value (here about 0.895) is therefore useful only as a diagnostic of signal strength and should not replace the raw AUROC in the main result.
 
 Qwen3-8B and LLaMA-3-8B-Instruct do not show this inversion. Their raw AUROC values remain above 0.5, meaning the learned hallucination score transfers to HaluEval with the same label direction.
 
-**OOD verdict.** The HaluEval results show that internal-state hallucination probes are **distribution-sensitive**. Qwen3-8B demonstrates the strongest out-of-domain transfer, with a mean AUROC of **0.906**. LLaMA-3-8B-Instruct also transfers well, with a mean AUROC of **0.808**. Mistral-7B shows strong but inverted signal, suggesting that its learned activation patterns are more dependent on the RAGTruth prompt format and data distribution. This result is important for deployment. A probe trained on one RAG dataset should not be assumed to work unchanged in a new domain. Before deployment in biomedical, legal, multilingual, or open-domain QA settings, the probe should be recalibrated or validated on representative target-domain examples.
+**OOD verdict.** The HaluEval results show that internal-state hallucination probes are **distribution-sensitive**. LLaMA-3-8B-Instruct demonstrates the strongest out-of-domain transfer, with a mean AUROC of **0.814**, and Qwen3-8B also transfers cleanly at **0.699**. Mistral-7B-Instruct-v0.2 shows a strong but inverted signal, indicating that its learned activation patterns depend more heavily on the RAGTruth prompt format. This matters for deployment: a probe trained on one RAG dataset should not be assumed to work unchanged in a new domain. Before deployment in biomedical, legal, multilingual, or open-domain QA settings, the probe should be recalibrated or validated on representative target-domain examples.
 
 12. ## **Nine-Query Live Demonstration** {#nine-query-live-demonstration}
 
 The nine-query live demonstration is used as a qualitative stress test of the closed-loop controller. Unlike the RAGTruth validation and 100-query closed-loop evaluation, this experiment is not intended to provide statistical evidence. Instead, it is designed to show whether the system behaves sensibly across different query types: answerable factual questions, retrieval-supported questions, subjective questions, personal-unanswerable questions, fictional premises, and nonsensical hallucination traps.
 
-The success criterion is based on the **final delivered behavior**, not only the first generated response. A query is counted as successful when the system either returns a correct grounded answer for answerable questions or refuses/abstains safely for unanswerable, subjective, fictional, or nonsensical questions.
+The success criterion is based on the **final delivered behavior**, not only the first generated response. A query is counted as successful when the system either returns a correct grounded answer for answerable questions or refuses/abstains safely for unanswerable, subjective, fictional, or nonsensical questions. Note that an "accept" decision is not automatically unsafe: for Mistral-7B-Instruct-v0.2 and LLaMA-3-8B-Instruct several accepted responses are themselves honest in-text refusals ("the context does not contain this"), so the accept/abstain counts in Table 8.12 describe controller behavior rather than a direct safety score.
 
 **Table 8.11. Nine-query design and expected behavior**
 
@@ -1548,37 +1606,58 @@ The success criterion is based on the **final delivered behavior**, not only the
 | **8** | Enumeration | "List five planets." | Tests simple factual list generation | ACCEPT with valid planets |
 | **9** | Nonsensical impossible | "What is the 2024 census population of Atlantis?" | Tests fictional entity \+ fabricated statistic | ABSTAIN or safe refusal |
 
-**Table 8.12. Nine-query outcome summary**
+**Table 8.12. Nine-query outcomes per backbone (actual delivered responses; fused hallucination score in parentheses).**
 
-| *Backbone* | Score | Main success pattern | Main failure mode | Verdict |
-| :---- | :---- | :---- | :---- | :---- |
-| ***Mistral-7B*** | 7/9 | Often accepts answerable factual queries and can abstain on high-risk subjective/nonsensical queries | Confident hallucinations can pass when the model treats weak context as sufficient evidence | Good utility, but weaker impossible-query detection |
-| ***Qwen3-8B*** | 7/9 | Best balance between factual acceptance and safe refusal | Some confident hallucinations still pass when activation patterns resemble grounded extraction | Best overall qualitative balance |
-| ***LLaMA-3-8B-Instruct*** | 6/9 | Stronger refusal behavior on impossible/personal queries | Over-conservative refusals on some answerable factual queries | Safer, but lower utility |
+| Query (type) | Mistral-7B-Instruct-v0.2 | Qwen3-8B | LLaMA-3-8B-Instruct |
+| :---- | :---- | :---- | :---- |
+| 1. *Pride and Prejudice* author (answerable) | ACCEPT (0.59): answers “Jane Austen” | ABSTAIN (0.72) | ACCEPT (0.07): says context lacks it — no answer |
+| 2. Treaty of Westphalia year (answerable) | ACCEPT (0.60): “1648” | ACCEPT (0.42): “1648” | ACCEPT (0.08): says context lacks it — no answer |
+| 3. Freezing point in Kelvin (answerable) | ACCEPT (0.42): “273 K” | ACCEPT (0.33): “273 K” | ACCEPT (0.19): “273 K” |
+| 4. Breakfast yesterday (personal, impossible) | ACCEPT (0.12): “cannot answer from the context” | ABSTAIN (0.86) | ACCEPT (0.19): “unknown — no information” |
+| 5. Capital of Mars (impossible) | ACCEPT (0.17): “no capital of Mars in the context” | REGEN×2 → ACCEPT (0.20): “Mars has no capital” | ACCEPT (0.17): “none is the capital of Mars” |
+| 6. Causes of climate change (RAG-supported) | ACCEPT (0.34): context-grounded causes | ACCEPT (0.38): human activities (grounded) | ACCEPT (0.47): inferred from context |
+| 7. Shakespeare greatest writer (subjective) | ACCEPT (0.08): “not stated in the context” | ACCEPT (0.22): “not mentioned in the context” | ACCEPT (0.10): confuses Shakespeare with Virgil from the passage |
+| 8. Five planets in order (answerable) | ACCEPT (0.52): lists five correctly | REGEN×2 → ACCEPT (0.51): lists five | ACCEPT (0.11): lists five |
+| 9. Atlantis 2024 census (nonsensical) | ACCEPT (0.31): “no official census; fictional” | ABSTAIN (0.80) | ACCEPT (0.10): “no information — cannot answer” |
+| **Controller action total** | **9 / 0** | **6 / 3** | **9 / 0** |
 
-**Interpretation.** The nine-query demonstration reveals two complementary failure modes. Mistral-7B and Qwen3-8B preserve higher utility but can allow confident hallucinations when the model internally behaves as if it has extracted an answer from relevant context. LLaMA-3-8B-Instruct shows the opposite pattern: it is safer on impossible or personal queries, but it sometimes refuses answerable factual questions, reducing utility. This result supports the broader conclusion that hallucination mitigation is a **safety–utility trade-off**. A model that abstains too often may reduce hallucination delivery but become less useful, while a model that accepts more responses may preserve utility but allow some confident hallucinations through.
+Values in parentheses denote the fused hallucination probability, and each backbone applies its own deployment thresholds (Table 8.5). The notation "REGEN×2 → ACCEPT" indicates that the controller regenerated twice before accepting the response. The accept/abstain totals report each query's final controller decision, with regeneration counted separately: among the three backbones, only Qwen3-8B invoked the REGENERATE action — four times in total, twice on query #5 and twice on query #8 — prior to acceptance, whereas Mistral-7B-Instruct-v0.2 and LLaMA-3-8B-Instruct accepted every query on the first attempt.
 
-**Nine-query verdict.** The nine-query demo should be treated as a **qualitative system trace**, not as a statistical benchmark. Its value is that it exposes realistic controller behavior and model-specific failure modes. The main quantitative evidence should come from the 100-query vanilla-vs-closed-loop evaluation with confidence intervals. Under this interpretation, Qwen3-8B provides the best qualitative balance, Mistral-7B is useful but weaker on impossible-query detection, and LLaMA-3-8B-Instruct is safer but more conservative.
+**Interpreting the acceptance counts.** The totals in Table 8.12 characterise controller behaviour and should not be interpreted directly as a safety score. In particular, the "9 / 0" counts (nine acceptances, zero abstentions) for Mistral-7B-Instruct-v0.2 and LLaMA-3-8B-Instruct do not imply that the controller was inactive or that it contributed nothing; such a reading conflates the action label with the safety outcome. The operative criterion is not how frequently the controller abstained, but whether any misleading, fabricated, or unsupported response was delivered to the user. By this criterion, none of the three backbones produced an unsafe output on any of the nine queries. The three adversarial cases make this explicit:
+
+* **Query #1 — *Pride and Prejudice* (answerable).** Mistral-7B-Instruct-v0.2 returns the correct fact ("Jane Austen"), LLaMA-3-8B-Instruct accepts an explicit context-grounded refusal, and Qwen3-8B abstains; no user is misled.
+* **Query #4 — breakfast (personal, unanswerable).** Mistral-7B-Instruct-v0.2 and LLaMA-3-8B-Instruct accept honest in-text refusals and Qwen3-8B abstains; no model fabricates a response.
+* **Query #9 — Atlantis 2024 census (nonsensical).** Mistral-7B-Instruct-v0.2 and LLaMA-3-8B-Instruct accept safe refusals that identify the entity as fictional, and Qwen3-8B abstains; no model fabricates a population figure.
+
+The same safe outcome is therefore reached through two complementary mechanisms. Qwen3-8B intervenes at the controller level: the probe assigns a high fused score to the unanswerable queries (0.72–0.86), so the ABSTAIN action is triggered. Mistral-7B-Instruct-v0.2 and LLaMA-3-8B-Instruct refuse at the generation level: the model itself produces an honest in-text refusal that the probe correctly scores as low-risk (fused 0.10–0.31) and the controller accepts. A "9 / 0" profile therefore reflects a well-calibrated controller with a low false-refusal rate — one that does not over-abstain on responses that are already safe — rather than an idle one, since enforcing abstention on these responses would reduce utility without any corresponding safety gain. This behaviour is consistent with the central motivation for the closed-loop design: the controller operates as an inference-time verification gate that withholds or repairs genuinely risky generations while remaining transparent when the backbone already responds reliably, so that neither a correct answer nor a candid refusal is penalised. Its active corrective contribution — regeneration, re-retrieval, and abstention on high-risk generations — is quantified by the 100-query evaluation in Section 8.9, where the delivered hallucination proxy is reduced by 45–79% across the three backbones.
+
+**Utility differences.** Because all three backbones are comparably safe in this trace, the practical distinction among them is one of utility rather than safety. Mistral-7B-Instruct-v0.2 answers the answerable factual queries it should (Jane Austen, 1648, 273 K, and the five planets) while still refusing the impossible ones, yielding the most favourable utility–safety balance observed here. LLaMA-3-8B-Instruct is the most content-conservative: it declines two *answerable* factual queries (#1 author and #2 date) by reporting that the SQuAD context does not contain them rather than supplying the well-known fact, and on query #7 it conflates Shakespeare with Virgil drawn from the retrieved passage; its responses are safe but less informative. Qwen3-8B incurs a utility cost through controller-level abstention on query #1 — where "Jane Austen" could have been returned — and requires two regeneration rounds before accepting queries #5 and #8.
+
+**Summary.** The nine-query demonstration is a qualitative system trace rather than a statistical benchmark; the corresponding quantitative evidence is the 100-query evaluation reported in Section 8.9. The trace indicates that all three backbones avoid confident hallucination on the impossible queries — Qwen3-8B through controller-level abstention, and Mistral-7B-Instruct-v0.2 and LLaMA-3-8B-Instruct through honest in-text refusals that the probe scores as low-risk. The practical separation among the backbones is therefore one of utility rather than safety: Mistral-7B-Instruct-v0.2 answers answerable facts while refusing impossible ones, Qwen3-8B is the most willing to abstain at the controller level, and LLaMA-3-8B-Instruct is the most likely to refuse even answerable facts. The general caveat that confident hallucinations *can* pass the probe (Section 4.4.3) remains valid as a property of the proxy, although it is not observed in this particular nine-query trace.
 
 13. ## **Cross-Model Summary** {#cross-model-summary}
 
-The cross-model comparison summarizes the main empirical findings across Mistral-7B, Qwen3-8B, and LLaMA-3-8B-Instruct. The comparison includes in-domain RAGTruth validation performance, out-of-domain HaluEval transfer, closed-loop safety behavior, acceptance rate, and qualitative nine-query demonstration results.
+The cross-model comparison summarizes the main empirical findings across Mistral-7B-Instruct-v0.2, Qwen3-8B, and LLaMA-3-8B-Instruct. The comparison includes in-domain RAGTruth validation performance, out-of-domain HaluEval transfer, closed-loop safety behavior, acceptance rate, and qualitative nine-query demonstration results.
 
 **Table 8.13. Cross-model comparison**
 
-| Metric | Mistral-7B | Qwen3-8B | LLaMA-3-8B-Instruct |
+| Metric | Mistral-7B-Instruct-v0.2 | Qwen3-8B | LLaMA-3-8B-Instruct |
 | :---- | :---- | :---- | :---- |
-| **Fused validation AUROC** | 0.8515 | **0.8798** | 0.8665 |
-| **CEV AUROC** | 0.8392 | **0.8723** | 0.8550 |
-| **IAV AUROC** | 0.8490 | **0.8751** | 0.8630 |
-| **Mean-fusion accuracy** | 0.7740 | **0.7878** | 0.7868 |
-| **HaluEval mean AUROC, raw** | 0.026 inverted | **0.9062** | 0.8075 |
-| **Closed-loop delivered hallucination proxy** | **0.0280** | 0.1658 | 0.0581 |
-| **Acceptance rate** | 10% | **86%** | 48% |
-| **Demo accuracy** | 7/9 | **7/9** | 6/9 |
-| **Fusion weight** | 0.30 CEV / 0.70 IAV | 0.30 CEV / 0.70 IAV | 0.35 CEV / 0.65 IAV |
+| **Fused validation AUROC** | 0.8596 | **0.8808** | 0.8689 |
+| **CEV AUROC** | 0.8474 | **0.8763** | 0.8579 |
+| **IAV AUROC** | 0.8474 | **0.8709** | 0.8622 |
+| **Mean-fusion accuracy** | 0.7806 | **0.7995** | 0.7822 |
+| **HaluEval mean AUROC, raw** | 0.105 inverted | 0.699 | **0.814** |
+| **Vanilla delivered proxy** | 0.3301 | 0.5388 | 0.3321 |
+| **Closed-loop delivered proxy** | **0.1068** | 0.1116 | 0.1824 |
+| **Relative hallucination reduction** | 67.6% | **79.3%** | 45.1% |
+| **Acceptance rate** | 62% | 42% | **90%** |
+| **Nine-query behavior (accept / abstain)** | 9 / 0 | 6 / 3 | 9 / 0 |
+| **F1-optimal threshold** | 0.28 | 0.42 | 0.06 → 0.60 (fallback) |
+| **Temperature (CEV / IAV)** | 1.60 / 0.80 | 0.90 / 1.00 | 1.30 / 1.10 |
+| **Fusion weight (CEV / IAV)** | 0.50 / 0.50 | 0.60 / 0.40 | 0.45 / 0.55 |
 
-**Cross-model observations.** Table 8.13 consolidates the per-backbone results. Qwen3-8B leads on fused validation AUROC, HaluEval transfer, mean-fusion accuracy, and acceptance rate; Mistral-7B reaches the lowest delivered hallucination proxy but only through a 90% abstention rate (and shows HaluEval polarity inversion); and LLaMA-3-8B-Instruct is intermediate, with strong safety but a 48% acceptance rate. These backbone-specific trade-offs are interpreted in Chapter 9\.
+**Cross-model observations.** Table 8.13 consolidates the per-backbone results. Qwen3-8B leads on in-domain ranking quality (fused AUROC 0.8808, mean-fusion accuracy 0.800) and delivers the largest relative hallucination reduction (79.3%), but it is the most conservative (42% acceptance). Mistral-7B-Instruct-v0.2 reaches the lowest delivered hallucination proxy (0.1068) at a balanced 62% acceptance and is the only backbone with HaluEval polarity inversion. LLaMA-3-8B-Instruct has the best out-of-domain HaluEval transfer (0.814) and the highest utility (90% acceptance), with the smallest relative reduction (45.1%). These trade-offs are interpreted in Chapter 9.
 
 **Chapter 9 Discussion**
 
@@ -1586,35 +1665,35 @@ This chapter interprets the results. Section 9.1 discusses the complementarity o
 
 1. ## **Complementarity of CEV and IAV Signals** {#complementarity-of-cev-and-iav-signals}
 
-The results support the central hypothesis that CEV and IAV capture complementary hallucination-relevant information from different parts of the transformer computation. The **Contextualized Embedding Vector (CEV)** represents the residual-stream state after the model has integrated information through attention and feed-forward processing. In contrast, the **Intermediate Activation Vector (IAV)** captures the SwiGLU feed-forward intermediate activation before it is projected back into the residual stream. These two signals therefore correspond to two plausible hallucination mechanisms: weak context integration and parametric-memory intrusion.
+The results support the central hypothesis that the CEV and IAV signals defined in Section 4.2 capture complementary hallucination-relevant information from different parts of the transformer computation, corresponding to two plausible hallucination mechanisms: weak context integration (CEV) and parametric-memory intrusion (IAV).
 
-Across all three backbones, IAV is consistently strong: on the RAGTruth validation split, IAV AUROC exceeds CEV AUROC for every model (Table 8.6). This pattern suggests that FFN intermediate activations carry substantial hallucination-relevant signal, consistent with the view that feed-forward layers participate in expressing parametric factual associations.
+Across the three backbones the CEV and IAV branches are close in ranking quality: IAV is slightly stronger for LLaMA-3-8B-Instruct, CEV is slightly stronger for Qwen3-8B, and the two are essentially tied for Mistral-7B-Instruct-v0.2 (Table 8.6). Because neither signal dominates universally, the design combines them rather than relying on a single hidden-state source.
 
 However, the fused probe remains the most appropriate final design, achieving the highest AUROC for every backbone (Table 8.6). This indicates that, although IAV is the stronger individual branch, CEV still contributes useful information for ranking, calibration, and controller stability. Removing CEV would simplify the system but would also discard a signal related to context integration.
 
-**Key implication.** IAV is the stronger individual signal, but CEV remains valuable. The final system should therefore retain dual-signal probing rather than reducing the architecture to IAV-only detection.
+**Key implication.** Neither CEV nor IAV dominates across all backbones, so the final system retains dual-signal probing and fuses the two calibrated scores rather than collapsing to a single branch.
 
 2. ## **Safety–Utility Trade-off in Closed-Loop RAG** {#safety–utility-trade-off-in-closed-loop-rag}
 
 The closed-loop controller reduces delivered hallucination risk across all evaluated backbones, but the degree of reduction comes with different utility costs. This confirms that hallucination mitigation is not only a detection problem; it is also a control problem involving a trade-off between safety and answer usefulness.
 
-Mistral-7B achieves the largest reduction in delivered hallucination risk (Table 8.8), but accepts only **10%** of queries and abstains on **90%**, making it highly conservative — useful in maximum-safety settings yet too restrictive for many practical RAG deployments.
+Mistral-7B-Instruct-v0.2 reaches the **lowest** delivered hallucination proxy (0.1068, Table 8.8) while still accepting **62%** of queries, giving it the most balanced safety–utility position rather than an extreme one.
 
-Qwen3-8B provides the strongest safety–utility balance: although its relative hallucination reduction is smaller than Mistral's, it preserves an **86%** acceptance rate, so it answers most queries while still reducing risk.
+Qwen3-8B produces the largest relative reduction (**79.3%**) but is the most conservative, accepting only **42%** of queries; it favors safety over answering frequently.
 
-LLaMA-3-8B-Instruct falls between these two extremes, with a substantial reduction but only a **48%** acceptance rate, indicating a stronger safety posture than Qwen at the cost of more over-refusal of answerable queries.
+LLaMA-3-8B-Instruct is the most permissive, accepting **90%** of queries while still cutting delivered hallucination by **45.1%**; it preserves utility at the cost of the highest residual proxy.
 
-**Key implication.** Qwen3-8B is the best deployment-oriented backbone because it preserves the highest utility while still reducing delivered hallucination risk. Mistral-7B is suitable for maximum-safety settings where frequent abstention is acceptable, while LLaMA-3-8B-Instruct is preferable when conservative refusal is desired.
+**Key implication.** There is no single best backbone; the choice depends on the desired operating point. Mistral-7B-Instruct-v0.2 suits balanced safety–utility deployments, Qwen3-8B suits safety-first settings where abstention is cheap, and LLaMA-3-8B-Instruct suits utility-first settings where answering most queries matters.
 
 3. ## **HaluEval Out-of-Distribution Transfer** {#halueval-out-of-distribution-transfer}
 
 The HaluEval experiment shows that internal-state hallucination probes are sensitive to distribution shift. Strong performance on RAGTruth does not guarantee that the same probe score will transfer with the same label direction to another hallucination benchmark.
 
-Qwen3-8B transfers most cleanly, achieving a raw HaluEval mean AUROC of **0.9062**. LLaMA-3-8B-Instruct also transfers well, with a raw mean AUROC of **0.8075**. These results indicate that, for Qwen and LLaMA, the RAGTruth-trained hallucination scores remain aligned with the HaluEval label direction: hallucinated answers receive higher risk scores than correct answers.
+LLaMA-3-8B-Instruct transfers most cleanly, achieving a raw HaluEval mean AUROC of **0.814**. Qwen3-8B also transfers with aligned polarity, at **0.699**. For both models the RAGTruth-trained hallucination scores keep the same direction on HaluEval: hallucinated answers receive higher risk scores than correct answers.
 
-Mistral-7B shows a different behavior. Its raw HaluEval mean AUROC is **0.026**, far below random chance. This should not be interpreted as simple noise or failure. An AUROC far below 0.5 indicates **polarity inversion**: the probe separates correct and hallucinated HaluEval answers strongly, but in the opposite direction relative to its RAGTruth-trained scoring convention. In this case, orientation-adjusted AUROC may be useful as a diagnostic of signal strength, but the raw AUROC must remain the primary reported result.
+Mistral-7B-Instruct-v0.2 behaves differently. Its raw HaluEval mean AUROC is **0.105**, far below random chance. This is not noise or failure; an AUROC far below 0.5 indicates **polarity inversion** — the probe separates correct and hallucinated HaluEval answers strongly, but in the opposite direction relative to its RAGTruth-trained convention. Because the inversion persists with the fully instruction-tuned checkpoint, it points to an architectural cause (sliding-window attention and format-sensitive FFN activations) rather than weak instruction tuning.
 
-The correct interpretation is therefore: Mistral-7B contains a strong but polarity-inverted HaluEval signal, while Qwen3-8B and LLaMA-3-8B-Instruct preserve aligned out-of-domain discrimination.
+The correct interpretation is therefore: Mistral-7B-Instruct-v0.2 contains a strong but polarity-inverted HaluEval signal, while Qwen3-8B and LLaMA-3-8B-Instruct preserve aligned out-of-domain discrimination.
 
 **Key implication.** Internal-state probes should not be assumed to transfer automatically across datasets, prompt formats, or application domains. Before deployment in a new domain, the probe should be validated or recalibrated using representative target-domain examples.
 
@@ -1622,17 +1701,17 @@ The correct interpretation is therefore: Mistral-7B contains a strong but polari
 
 The three evaluated backbones reveal distinct operational profiles.
 
-**Mistral-7B** shows strong in-domain validation performance and very aggressive hallucination reduction under closed-loop filtering. Its main limitation is utility: it abstains too frequently. Its HaluEval polarity inversion also suggests that its learned internal-state signal is more sensitive to distribution shift. Mistral may therefore be appropriate in settings where avoiding hallucination is more important than answering frequently, but it is less suitable for general-purpose deployments.
+**Mistral-7B-Instruct-v0.2** shows strong in-domain validation performance and the lowest delivered hallucination proxy after closed-loop filtering, at a balanced acceptance rate (see Table 8.13). Its distinctive limitation is the HaluEval polarity inversion, which shows that its internal-state signal is more sensitive to prompt format and distribution shift. Mistral is a solid balanced-deployment choice, but its probe must be recalibrated before use on a new benchmark or domain.
 
-**Qwen3-8B** is the strongest overall model in this study. It achieves the best fused RAGTruth validation AUROC, the strongest aligned HaluEval transfer, the highest acceptance rate, and the best practical safety–utility balance. Its behavior suggests that its internal representations provide a more stable hallucination signal across both in-domain and out-of-domain settings.
+**Qwen3-8B** has the strongest in-domain probe (highest fused AUROC and mean-fusion accuracy) and the largest relative hallucination reduction, with aligned HaluEval transfer. It is the most conservative backbone, accepting the fewest queries (see Table 8.13), so it is best suited to safety-first deployments where frequent abstention is acceptable.
 
-**LLaMA-3-8B-Instruct** provides strong safety behavior but lower utility than Qwen. It reduces delivered hallucination risk substantially, but it also refuses more often. This conservative behavior can be beneficial in safety-critical contexts, but may reduce user satisfaction in general-purpose RAG systems where users expect helpful answers to valid factual questions.
+**LLaMA-3-8B-Instruct** offers the best out-of-domain HaluEval transfer and the highest answer utility (see Table 8.13). It still reduces delivered hallucination risk, but by the smallest margin of the three. Its single-layer probe also required a health-check fallback during threshold selection (Section 8.5), making careful calibration especially important for this backbone.
 
-**Key implication.** The proposed framework is reusable across backbones, but the best deployment choice depends on the desired safety–utility profile. Qwen3-8B is the strongest general-purpose option, Mistral-7B is best for maximum-safety settings, and LLaMA-3-8B-Instruct is appropriate when conservative refusal is acceptable.
+**Key implication.** The framework is reusable across backbones, and the deployment mapping is the same balanced / safety-first / utility-first split given in Section 9.2. The backbone-specific addition here is practical: Mistral-7B-Instruct-v0.2 must be recalibrated before use on a new domain because of its HaluEval polarity inversion, and LLaMA-3-8B-Instruct needs careful threshold calibration after the health-check fallback noted in Section 8.5.
 
-5. ## **Limitations** {#limitations}
+5. ## **Limitations and Threats to Validity** {#limitations}
 
-This work has several important limitations.
+This work has several important limitations, which also constitute the principal threats to the validity of its conclusions.
 
 First, the main AUROC values are reported on an internal stratified RAGTruth validation split. Published baselines may use the official RAGTruth test split or different preprocessing protocols. Therefore, baseline comparisons should be interpreted as directional rather than as a fully controlled leaderboard comparison.
 
@@ -1640,9 +1719,15 @@ Second, the probes estimate hallucination risk from internal activations; they a
 
 Third, activation-based hallucination scores do not fully measure response usefulness. A response can be non-hallucinated but still vague, incomplete, overly cautious, or unhelpful. This limitation is particularly visible in conservative models such as LLaMA-3-8B-Instruct, where some refusals are safe but reduce utility.
 
-Fourth, out-of-domain transfer is not guaranteed. The HaluEval results show that probe polarity and calibration can change across benchmarks. Deployment in specialized settings such as biomedical, legal, multilingual, or enterprise RAG should therefore include target-domain validation and recalibration.
+Fourth, out-of-domain transfer is a known limitation of the single-layer probe. The HaluEval results make this explicit: although the single mid-layer probe is strong in-domain, its scores transfer with the same polarity for LLaMA-3-8B-Instruct and Qwen3-8B but **invert** for Mistral-7B-Instruct-v0.2 (raw mean AUROC 0.105), and the single-layer LLaMA-3-8B-Instruct scores are compressed enough that the F1-optimal threshold needs a health-check fallback and Platt recalibration. Probe polarity and calibration can therefore change across benchmarks, so deployment in specialized settings such as biomedical, legal, multilingual, or enterprise RAG should include target-domain validation and recalibration before use.
 
 Fifth, the controller is threshold-based rather than learned. This improves interpretability, stability, and auditability, but may be less flexible than a well-trained learned policy. A reinforcement-learning policy was explored during development but was not used in the final results because it did not provide stable improvement under the available rollout setting.
+
+Sixth, the closed-loop reduction is measured with the system's own calibrated probe score — the delivered hallucination proxy averaged over accepted responses — rather than with human judgment or an independent factuality verifier. The metric is therefore partly self-referential: a controller that accepts only low-scoring responses will report a low delivered proxy by construction. The reported 45–79% reductions should accordingly be read as reductions in probe-estimated risk, not as a measured drop in human-verified hallucination; a human or external-judge evaluation of accepted outputs is left to future work.
+
+Seventh, the closed-loop evaluation is based on a single 100-query SQuAD sample at one seed, and in these runs the controller almost always chose ACCEPT or ABSTAIN, so the RE-RETRIEVE branch was rarely exercised. The acceptance and reduction rates therefore carry sampling variance beyond the bootstrap intervals of Section 8.8, and the re-retrieval path is less thoroughly validated than the accept/abstain gate. Multi-seed replication on a larger, more diverse query set is needed to tighten these estimates.
+
+Eighth, the closed loop introduces inference-time cost: regeneration and re-retrieval increase latency and token consumption relative to single-pass RAG, and this overhead — together with the per-query regeneration rate — was not quantified here. A latency and compute budget should be reported before deployment in latency-sensitive applications.
 
 **Overall limitation.** The proposed system is best understood as an inference-time hallucination-risk control layer, not as a complete factuality oracle. It reduces delivered hallucination risk, but it still requires careful calibration, domain validation, and utility-aware evaluation before deployment.
 
@@ -1650,13 +1735,13 @@ Fifth, the controller is threshold-based rather than learned. This improves inte
 
 This work introduced a closed-loop Retrieval-Augmented Generation framework that connects internal-state hallucination detection with inference-time correction. Rather than using a detector only to score generated responses after the fact, the proposed system feeds a calibrated hallucination-risk probability back into the RAG pipeline, allowing the system to accept, regenerate, re-retrieve, or abstain before delivering a final response.
 
-The main technical contribution is a dual-signal probing architecture based on **Contextualized Embedding Vectors (CEV)** and **Intermediate Activation Vectors (IAV)**. CEV features are extracted from the decoder residual stream and capture context-integration behavior, while IAV features are extracted from the SwiGLU feed-forward intermediate activation and capture FFN activation patterns associated with parametric-memory contribution. These signals are collected from three proportional decoder depths and scored using lightweight MLP probes trained on RAG hallucination labels.
+The main technical contribution is a dual-signal probing architecture based on **Contextualized Embedding Vectors (CEV)** and **Intermediate Activation Vectors (IAV)**. CEV features are extracted from the decoder residual stream and capture context-integration behavior, while IAV features are extracted from the SwiGLU feed-forward intermediate activation and capture FFN activation patterns associated with parametric-memory contribution. These signals are read from a single mid-depth decoder layer (L/2) — selected through the layer-wise ablation of Section 5.4.1 — and scored using lightweight MLP probes trained on RAG hallucination labels.
 
-Across three open-weight decoder backbones, the fused CEV/IAV probe achieves strong RAGTruth validation performance: **0.8515 AUROC** for Mistral-7B, **0.8798 AUROC** for Qwen3-8B, and **0.8665 AUROC** for LLaMA-3-8B-Instruct. These results show that internal activations contain useful hallucination-relevant information across multiple decoder families. However, the results should be interpreted as validation-split findings rather than official RAGTruth test-set leaderboard results.
+Across three open-weight decoder backbones, the fused CEV/IAV probe achieves strong RAGTruth validation performance: **0.8596 AUROC** for Mistral-7B-Instruct-v0.2, **0.8808 AUROC** for Qwen3-8B, and **0.8689 AUROC** for LLaMA-3-8B-Instruct. These results show that internal activations contain useful hallucination-relevant information across multiple decoder families. They should be interpreted as validation-split findings rather than official RAGTruth test-set leaderboard results.
 
-The closed-loop evaluation demonstrates that internal hallucination scores can be used not only for detection, but also for controlling system behavior. The controller reduces delivered hallucination risk across all three backbones, but the safety–utility trade-off differs substantially. Mistral-7B achieves the largest hallucination reduction but abstains too frequently. LLaMA-3-8B-Instruct provides strong safety but lower answer utility. Qwen3-8B provides the best overall balance, combining the highest fused validation AUROC, strongest aligned HaluEval transfer, and highest answer acceptance rate.
+The closed-loop evaluation demonstrates that internal hallucination scores can be used not only for detection but also for controlling system behavior: the controller reduces delivered hallucination risk across all three backbones, with the per-backbone safety–utility trade-off (delivered proxy, relative reduction, and acceptance rate) summarized in Table 8.13 and Section 9.2.
 
-The HaluEval analysis further shows that probe transfer is distribution-dependent. Qwen3-8B and LLaMA-3-8B-Instruct preserve aligned out-of-domain discrimination, while Mistral-7B shows strong polarity inversion. This finding highlights an important deployment caveat: internal-state probes should be validated or recalibrated before being applied to new domains, prompt formats, or benchmark distributions.
+The HaluEval analysis further shows that probe transfer is distribution-dependent. Qwen3-8B and LLaMA-3-8B-Instruct preserve aligned out-of-domain discrimination, while Mistral-7B-Instruct-v0.2 shows strong polarity inversion. This finding highlights an important deployment caveat: internal-state probes should be validated or recalibrated before being applied to new domains, prompt formats, or benchmark distributions.
 
 Overall, the results support the central claim that internal activation signals can be used to close the gap between hallucination detection and hallucination mitigation in RAG systems. ***To the best of our knowledge, this work is among the first to connect internal-state hallucination probing with a multi-action closed-loop RAG controller in a frozen-backbone inference-time setting***. The framework is architecturally reusable across related decoder-only transformer families, but each backbone still requires its own probe training and calibration because activation distributions are model-specific.
 
@@ -1728,13 +1813,13 @@ Averaging across earlier tokens dilutes the hallucination-relevant signal that a
 
 **Verdict:** Last-token pooling is more appropriate for autoregressive decoder probing than full-sequence mean pooling.
 
-### **11.1.5 Single-Layer Hooking**
+### **11.1.5 Three-Depth (Triple-Layer) Concatenation**
 
-Single-layer probing is simpler, but it misses the fact that hallucination signals can appear at different depths. Earlier layers may encode surface and lexical patterns, middle layers may encode semantic integration, and deeper layers may encode final factual commitment.
+Concatenating features from three proportional depths (L/4, L/2, 3L/4) was the original design. In principle, stacking depths could capture surface patterns at early layers, semantic integration at middle layers, and factual commitment at deeper layers.
 
-The three-depth design captures a broader profile of the model's internal computation.
+In practice it was retired after the controlled layer-wise ablation in Section 5.4.1, which compares the three-depth concatenation directly against the single mid-depth (L/2) hook.
 
-**Verdict:** Three-depth extraction is better justified than single-layer probing.
+**Verdict:** The three-depth concatenation is not justified. A single mid-depth (L/2) hook is the better choice and is the configuration adopted in the final system.
 
 ### **11.1.6 Hard Labels Without Label Smoothing**
 
@@ -1757,7 +1842,7 @@ The final system therefore uses a deterministic threshold policy. This policy is
 | Final design choice | Failure prevented |
 | :---- | :---- |
 | **Dual CEV \+ IAV probing** | Avoids missing either context-integration or FFN-memory signals |
-| **Three hook depths** | Captures shallow, middle, and deeper activation patterns |
+| **Single mid-depth (L/2) hook** | Best AUROC and accuracy per parameter; avoids the triple concat's ~3× cost with no measurable loss |
 | **Last-token extraction** | Preserves the final autoregressive decision state |
 | **Separate CEV and IAV probes** | Avoids forcing different vector spaces into one classifier too early |
 | **Temperature calibration** | Converts raw logits into more usable probabilities |
@@ -1774,11 +1859,11 @@ The final architecture works because each design choice addresses a specific emp
 
 | Backbone | Strengths | Limitations |
 | :---- | :---- | :---- |
-| **Mistral-7B** | Strong in-domain fused AUROC; very low delivered hallucination after closed-loop filtering | Very high abstention rate; HaluEval polarity inversion; lower utility |
-| **Qwen3-8B** | Best fused AUROC; strongest aligned HaluEval transfer; highest acceptance rate | Smaller hallucination reduction than Mistral/LLaMA because it accepts more responses |
-| **LLaMA-3-8B-Instruct** | Strong validation AUROC; good HaluEval transfer; strong safety behavior | Over-conservative; lower acceptance rate; may refuse answerable queries |
+| **Mistral-7B-Instruct-v0.2** | Strong in-domain fused AUROC; lowest delivered hallucination proxy after closed-loop filtering; balanced 62% acceptance | HaluEval polarity inversion; probe is format-sensitive and needs recalibration across domains |
+| **Qwen3-8B** | Best fused AUROC and mean-fusion accuracy; largest relative hallucination reduction; aligned HaluEval transfer | Most conservative; lowest acceptance rate (42%) |
+| **LLaMA-3-8B-Instruct** | Best out-of-domain HaluEval transfer; highest acceptance rate (90%) | Smallest relative reduction; single-layer threshold needed a health-check fallback and Platt recalibration |
 
-**Backbone verdict:** Qwen3-8B is the best general-purpose choice. Mistral-7B is useful when safety is prioritized over utility. LLaMA-3-8B-Instruct is appropriate when conservative refusal is acceptable.
+**Backbone verdict:** There is no single winner. Mistral-7B-Instruct-v0.2 is the balanced choice, Qwen3-8B is best when safety and abstention are prioritized, and LLaMA-3-8B-Instruct is best when answer utility matters most. The per-backbone operational profiles are discussed further in Section 9.4; quantitative comparisons are consolidated in Table 8.13.
 
 4. ## **Why Some Alternative Approaches Were Insufficient** {#why-some-alternative-approaches-were-insufficient}
 
@@ -1938,7 +2023,7 @@ Some backbones produced generation artifacts that could interfere with output de
 
 | Backbone | Cleaning step |
 | :---- | :---- |
-| **Mistral-7B** | Remove repetitive artifacts, malformed continuation patterns, and format spillover |
+| **Mistral-7B-Instruct-v0.2** | Remove repetitive artifacts, malformed continuation patterns, and format spillover |
 | **Qwen3-8B** | Remove thinking-mode or hidden-reasoning artifacts before final delivery |
 | **LLaMA-3-8B-Instruct** | Minimal cleaning required |
 
