@@ -444,6 +444,7 @@ Retrieval-Augmented Generation (RAG) \[1\] was conceived as a mechanism for fact
 
 ![][image1]
 
+
 *\[Figure 1.1 — Conceptual comparison between standard open-loop RAG and the proposed closed-loop RAG pipeline.\]*
 
 **Figure 1.1. Conceptual comparison between standard open-loop RAG and the proposed closed-loop RAG pipeline.**
