@@ -1,0 +1,78 @@
+\chapter{Discussion}
+\label{ch:discussion}
+
+This chapter interprets the results. Section~\ref{sec:complementarity} discusses the complementarity of CEV and IAV signals. Section~\ref{sec:safety_utility} discusses the safety--utility trade-off. Section~\ref{sec:halueval_discussion} discusses HaluEval transfer. Section~\ref{sec:backbone_behavior} discusses backbone-specific behavior, and Section~\ref{sec:limitations} presents limitations and threats to validity.
+
+%% -------------------------------------------------
+\section{Complementarity of CEV and IAV Signals}
+\label{sec:complementarity}
+
+The results support the central hypothesis that the CEV and IAV signals defined in Section~\ref{sec:cev_iav_signals} capture complementary hallucination-relevant information from different parts of the transformer computation, corresponding to two plausible hallucination mechanisms: weak context integration (CEV) and parametric-memory intrusion (IAV).
+
+Across the three backbones the CEV and IAV branches are close in ranking quality: IAV is slightly stronger for LLaMA-3-8B-Instruct, CEV is slightly stronger for Qwen3-8B, and the two are essentially tied for Mistral-7B-Instruct-v0.2.
+
+However, the fused probe remains the most appropriate final design, achieving the highest AUROC for every backbone (Table~\ref{tab:ragtruth_results}). This indicates that, although IAV is the stronger individual branch, CEV provides additive context-integration information that the fusion step exploits.
+
+\textbf{Key implication.} Neither CEV nor IAV dominates across all backbones, so the final system retains dual-signal probing and fuses the two calibrated scores rather than collapsing to a single branch.
+
+%% -------------------------------------------------
+\section{Safety--Utility Trade-off in Closed-Loop RAG}
+\label{sec:safety_utility}
+
+The closed-loop controller reduces delivered hallucination risk across all evaluated backbones, but the degree of reduction comes with different utility costs. This confirms that hallucination mitigation is not free---it involves a trade-off between safety (reducing hallucinated outputs) and utility (preserving the number of answered queries).
+
+\begin{itemize}
+    \item \textbf{Mistral-7B-Instruct-v0.2} reaches the \emph{lowest} delivered hallucination proxy (0.1068, Table~\ref{tab:vanilla_vs_cl}) while still accepting 62\% of queries, giving it the most balanced safety--utility position.
+    \item \textbf{Qwen3-8B} produces the largest relative reduction (\textbf{79.3\%}) but is the most conservative, accepting only 42\% of queries; it favors safety over answering frequently.
+    \item \textbf{LLaMA-3-8B-Instruct} is the most permissive, accepting 90\% of queries while still cutting delivered hallucination by 45.1\%; it preserves utility at the cost of the highest residual proxy.
+\end{itemize}
+
+\textbf{Key implication.} There is no single best backbone; the choice depends on the desired operating point. Mistral suits balanced deployments, Qwen suits safety-first applications, and LLaMA suits utility-first settings.
+
+%% -------------------------------------------------
+\section{HaluEval Out-of-Distribution Transfer}
+\label{sec:halueval_discussion}
+
+The HaluEval experiment shows that internal-state hallucination probes are sensitive to distribution shift. Strong performance on RAGTruth does not guarantee that the same probe score will transfer with the same label direction to a different benchmark.
+
+LLaMA-3-8B-Instruct transfers most cleanly, achieving a raw HaluEval mean AUROC of \textbf{0.814}. Qwen3-8B also transfers with aligned polarity, at \textbf{0.699}. For both models the RAGTruth-trained hallucination direction is preserved.
+
+Mistral-7B-Instruct-v0.2 shows strong but \emph{polarity-inverted} HaluEval discrimination (raw AUROC 0.105, adjusted 0.895). The signal exists and is strong, but its direction flips under distribution shift.
+
+\textbf{Key implication.} Internal-state probes should not be assumed to transfer automatically across datasets, prompt formats, or application domains. Before deployment in a new domain, the probe should be validated or recalibrated.
+
+%% -------------------------------------------------
+\section{Backbone-Specific Behavior}
+\label{sec:backbone_behavior}
+
+The three evaluated backbones reveal distinct operational profiles.
+
+\textbf{Mistral-7B-Instruct-v0.2} shows strong in-domain validation performance and the lowest delivered hallucination proxy after closed-loop filtering, at a balanced acceptance rate (see Table~\ref{tab:cross_model}). Its distinctive limitation is the HaluEval polarity inversion.
+
+\textbf{Qwen3-8B} has the strongest in-domain probe (highest fused AUROC and mean-fusion accuracy) and the largest relative hallucination reduction, with aligned HaluEval transfer. It is the most conservative backbone, accepting the fewest queries (see Table~\ref{tab:cross_model}), so it is best suited to safety-first deployments.
+
+\textbf{LLaMA-3-8B-Instruct} offers the best out-of-domain HaluEval transfer and the highest answer utility (see Table~\ref{tab:cross_model}). It still reduces delivered hallucination risk, but by the smallest margin. Its threshold selection required a health-check fallback.
+
+%% -------------------------------------------------
+\section{Limitations and Threats to Validity}
+\label{sec:limitations}
+
+This work has several important limitations, which also constitute the principal threats to the validity of its conclusions.
+
+\textbf{First}, the main AUROC values are reported on an internal stratified RAGTruth validation split. Published baselines may use the official RAGTruth test split or different preprocessing protocols.
+
+\textbf{Second}, the probes estimate hallucination risk from internal activations; they are not complete factuality verifiers. They may miss confident hallucinations when the model's internal state resembles grounded generation.
+
+\textbf{Third}, activation-based hallucination scores do not fully measure response usefulness. A response can be non-hallucinated but still vague, incomplete, or unhelpful.
+
+\textbf{Fourth}, out-of-domain transfer is a known limitation. The HaluEval results make this explicit.
+
+\textbf{Fifth}, the controller is threshold-based rather than learned. This improves interpretability but may be less flexible than a well-trained learned policy.
+
+\textbf{Sixth}, the closed-loop reduction is measured with the system's own calibrated probe score rather than with human judgment or an independent factuality verifier. The metric is therefore partly self-referential. The reported 45--79\% reductions should be read as reductions in \emph{probe-estimated risk}, not as a measured drop in human-verified hallucination.
+
+\textbf{Seventh}, the closed-loop evaluation is based on a single 100-query SQuAD sample at one seed, and the RE-RETRIEVE branch was rarely exercised. Multi-seed replication on a larger, more diverse query set is needed.
+
+\textbf{Eighth}, the closed loop introduces inference-time cost: regeneration and re-retrieval increase latency and token consumption relative to single-pass RAG, and this overhead was not quantified here.
+
+\textbf{Overall limitation.} The proposed system is best understood as an inference-time hallucination-risk control layer, not as a complete factuality oracle.

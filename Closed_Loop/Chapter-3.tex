@@ -1,121 +1,64 @@
-\chapter{MATERIALS AND METHODOLOGY}
-\label{chapter3}
+\chapter{Literature Review}
+\label{ch:literature_review}
 
-This chapter outlines the research design and methodology adopted in this study. It describes the materials, procedures, and techniques used to achieve the research objectives. The purpose of this chapter is to provide sufficient detail so that the study can be replicated and evaluated for validity and reliability.
+This chapter reviews the literature relevant to the research domain. Section~\ref{sec:lit_hallucination} introduces hallucination in RAG. Section~\ref{sec:lit_blackbox} reviews black-box and reference-based detection. Section~\ref{sec:lit_probing} reviews internal-state probing. Section~\ref{sec:lit_ffn} discusses FFN layers as factual memory. Section~\ref{sec:lit_closedloop} reviews closed-loop and self-corrective generation, and Section~\ref{sec:lit_crossarch} discusses cross-architecture generalization.
 
-This chapter is organized as follows: Section 3.1 describes the materials used in the study. Section 3.2 presents the methodology and research design. Section 3.3 discusses the participants or data sources. Section 3.4 outlines the instruments used. Section 3.5 describes the procedure and timeline. Section 3.6 explains the data analysis techniques, and Section 3.7 highlights ethical considerations and limitations.
+%% -------------------------------------------------
+\section{Hallucination in Retrieval-Augmented Generation}
+\label{sec:lit_hallucination}
 
-% -------------------------------------------------
-\section{Materials [Methodology and Research Design]}
+Hallucination refers to the generation of fluent but factually unsupported, unverifiable, or source-contradictory content. Prior surveys identify hallucination as a central reliability problem in large language models and commonly distinguish between \emph{intrinsic hallucination}, where the output contradicts the provided source, and \emph{extrinsic hallucination}, where the output introduces plausible but unsupported information beyond the available evidence~\cite{ji2023hallucination,huang2023survey,rawte2023survey}.
 
-This section describes the materials used in the study. Depending on the nature of the research, materials may include physical components, datasets, software tools, or experimental setups.
+%% -------------------------------------------------
+\section{Black-Box, Statistical, and Reference-Based Hallucination Detection}
+\label{sec:lit_blackbox}
 
-\subsection{Basic Research Materials}
+SelfCheckGPT is a representative black-box method. It samples multiple responses from the same model and measures whether the factual content remains consistent across samples~\cite{manakul2023selfcheckgpt}. The method is attractive because it does not require access to model weights, hidden states, or external databases. However, it requires multiple generations per query and can fail when the model consistently repeats the same incorrect claim.
 
-List all materials required for conducting the research. This may include hardware, software, datasets, or any other resources necessary for experimentation.
+Reference-based methods evaluate generated claims against retrieved or provided evidence. RefChecker, for example, decomposes responses into fine-grained claim triplets and checks them against references~\cite{hu2024refchecker}. Such approaches are useful for post-hoc verification, but they usually require an additional checking pipeline and do not directly use the generating model's internal computation as the intervention signal.
 
-% -------------------------------------------------
-\section{Experimental Investigation / Methodology}
+Overall, black-box, statistical, and reference-based methods provide important baselines, but they are not sufficient for the closed-loop setting studied here because they either operate after generation, require repeated sampling, depend on external checkers, or do not directly control the RAG inference loop.
 
-This section provides a detailed description of the methodology used in the study. The chosen methodology should align with the research objectives and be appropriate for addressing the research problem.
+%% -------------------------------------------------
+\section{Internal-State Probing for Hallucination Detection}
+\label{sec:lit_probing}
 
-\subsection{Methodology}
+Internal-state probing methods are motivated by the observation that transformer activations can contain factuality-relevant information not fully visible from surface text or output probabilities. Instead of judging only the final answer, these methods inspect hidden representations produced inside the model.
 
-The methodology describes the overall strategy and process used to conduct the research. It includes the steps taken to collect, process, and analyze data. Common research methodologies include experimental, analytical, simulation-based, and data-driven approaches.
+Azaria and Mitchell~\cite{azaria2023saplma} showed that hidden activations can predict whether statements are true or false. Their classifier, trained on internal states, achieves approximately \textbf{71--83\% accuracy} depending on the base model. This demonstrates that internal activations can contain truthfulness-related information. However, SAPLMA-style probing is primarily a detector: it produces a factuality score but does not connect that score to an inference-time RAG correction policy.
 
-Figure \ref{fig:methodology_flow} illustrates a general workflow of the research process.
+INSIDE/EigenScore extends internal-state analysis by measuring representation-level uncertainty through the eigenspectrum or covariance structure of hidden states across multiple sampled generations~\cite{chen2024inside}. This provides a useful internal-state uncertainty signal, but it still depends on multiple generations, increasing inference cost.
 
-\begin{figure}[!tbh]
-    \centering
-    \rule{0.7\textwidth}{5cm}
-    \vspace{0.5em}
-    \caption{General methodology workflow showing major stages of the research process.}
-    \label{fig:methodology_flow}
-\end{figure}
+MIND, proposed by Su et al.~\cite{su2024mind}, is also relevant because it uses LLM internal states for real-time hallucination detection without manual annotation. This supports the broader claim that internal representations can be useful for hallucination detection during inference. However, like most detection-oriented methods, it does not implement the same multi-action RAG controller used in the present work.
 
-\subsection{Research Design}
+Together, these methods show that hallucination detection can benefit from hidden states, attention behavior, FFN activity, uncertainty signals, and context--knowledge balance. The remaining gap is to connect such detection signals to a closed-loop inference-time controller that can change the RAG system's behavior before a risky answer reaches the user.
 
-This section explains whether the research follows a quantitative, qualitative, or mixed-method approach. It also describes how variables are defined and how the study is structured.
+%% -------------------------------------------------
+\section{FFN Layers as Factual Memory and Motivation for IAV Probing}
+\label{sec:lit_ffn}
 
-\subsubsection{Quantitative Approach}
+The motivation for probing FFN intermediate activations comes from mechanistic interpretability work on transformer feed-forward layers. Geva et al.~\cite{geva2021ffn} showed that transformer FFN layers can operate as key-value memories: keys correspond to textual patterns, while values influence the output-token distribution. They also observed that lower layers tend to capture shallower patterns, whereas upper layers capture more semantic information.
 
-If the study is quantitative, clearly define the independent and dependent variables and describe how data will be measured and analyzed.
+These findings motivate the Intermediate Activation Vector (IAV) used in this work. The residual-stream CEV reflects the accumulated contextual state after attention and feed-forward processing, while the IAV captures the FFN contribution before it is projected back into the residual stream. Combining CEV and IAV therefore allows the detector to examine both context-integration behavior and parametric-memory contribution.
 
-\subsubsection{Qualitative Approach}
+%% -------------------------------------------------
+\section{Closed-Loop and Self-Corrective Generation}
+\label{sec:lit_closedloop}
 
-If the study is qualitative, describe the data collection methods such as interviews, observations, or document analysis.
+Prior work on self-corrective generation usually follows two directions: model self-reflection and retrieval correction. Self-RAG trains a language model to retrieve, generate, and critique using special reflection tokens~\cite{asai2024selfrag}. This improves controllability, but it requires training the model with reflection-token supervision and is therefore different from a frozen-model activation-probing approach.
 
-% -------------------------------------------------
-\section{Participants / Data Sources}
+CRAG improves RAG robustness by adding a lightweight retrieval evaluator that assesses retrieved-document quality and triggers corrective retrieval actions, including web search when static retrieval is insufficient~\cite{yan2024crag}. CRAG directly addresses retrieval failure, but its intervention signal comes from a retrieval evaluator rather than from the generating LLM's own internal activations.
 
-This section describes the source of data used in the study. It may include human participants, experimental samples, or datasets.
+Abstention is also important for safe generation. Wen et al.~\cite{wen2024abstention} survey abstention in LLMs and frame refusal as a mechanism for reducing hallucination and improving safety when the model is uncertain or when a reliable answer cannot be produced. This supports the use of ABSTAIN as one branch of the proposed controller.
 
-For experimental or computational studies, describe the type of data collected, data size, and any preprocessing steps applied.
+To the best of our knowledge, prior work has not \emph{combined hallucination detection from the generating model's own CEV/IAV activations with a multi-action inference-time RAG controller that can choose among accepting, regenerating, re-retrieving, and abstaining in a frozen-model setting.}
 
-% -------------------------------------------------
-\section{Instruments}
+%% -------------------------------------------------
+\section{Cross-Architecture Generalization}
+\label{sec:lit_crossarch}
 
-This section lists and describes all instruments used in the study. Instruments may include measurement tools, simulation software, survey forms, or experimental setups.
+Many hallucination-detection methods are evaluated on one model family or a limited set of related backbones. HalluRAG~\cite{frohling2024hallurag} is relevant here because it studies closed-domain RAG hallucination using internal states and reports that MLP classifiers trained on HalluRAG can reach test accuracies up to \textbf{75\%}, while also showing limited generalizability across settings. This motivates evaluation beyond a single model or dataset.
 
-Copies of instruments or detailed configurations may be included in the Appendix.
+Cross-Layer Attention Probing (CLAP) further addresses generalization by evaluating fine-grained hallucination detection across \textbf{five LLMs and three tasks}~\cite{zhao2024clap}. This supports the need to examine whether activation-based hallucination signals transfer across different model families.
 
-\begin{table}[!tbh]
-\centering
-\caption{Example of experimental parameters and settings}
-\label{tab:parameters}
-\begin{tabular}{|c|c|c|}
-\hline
-\textbf{Parameter} & \textbf{Value} & \textbf{Description} \\
-\hline
-Parameter 1 & Value 1 & Description of parameter 1 \\
-Parameter 2 & Value 2 & Description of parameter 2 \\
-Parameter 3 & Value 3 & Description of parameter 3 \\
-\hline
-\end{tabular}
-\vspace{0.3em}
-\end{table}
-
-% -------------------------------------------------
-\section{Procedure and Timeline}
-
-This section describes the sequence of steps followed in conducting the research. It should include how data was collected, processed, and recorded.
-
-If the study was conducted in multiple stages, a timeline should be provided. Justify the chosen procedure and explain why it is appropriate for the research.
-
-% -------------------------------------------------
-\section{Analysis}
-
-This section explains how the data was analyzed. It should describe statistical methods, computational techniques, or analytical models used in the study.
-
-For example, performance metrics can be defined as:
-
-\begin{equation}
-\text{Metric} = \frac{\text{Desired Output}}{\text{Total Output}}
-\end{equation}
-
-Describe in detail how the analysis ensures accuracy, validity, and reliability of results.
-
-% -------------------------------------------------
-\section{Algorithm (if applicable)}
-
-If your study involves computational steps or procedural operations, they can be described using an algorithm.
-
-\begin{algorithm}[H]
-\SetAlgoLined
-\KwIn{Input data or parameters}
-\KwOut{Desired output}
-
-Initialize variables\;
-Process input data\;
-Apply required operations\;
-Generate output\;
-
-\caption{General algorithm for data processing}
-\end{algorithm}
-
-% -------------------------------------------------
-\section{Ethics and Limitations}
-
-This section discusses ethical considerations related to the research. It may include issues such as data privacy, consent (if human participants are involved), and compliance with institutional guidelines.
-
-Additionally, outline any limitations of the study. These may arise due to constraints in data, methodology, tools, or assumptions. Acknowledging limitations helps in understanding the scope and validity of the research findings.
+The present work evaluates the same CEV/IAV probing and controller design across three decoder-only transformer backbones: Mistral-7B-Instruct-v0.2, LLaMA-3-8B-Instruct, and Qwen3-8B. These models differ in tokenizer design, training data, layer structure, and FFN intermediate dimensions. This provides a controlled test of whether the proposed activation-probing framework can be reused across related decoder-only transformer families without modifying the backbone architecture.

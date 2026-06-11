@@ -1,94 +1,68 @@
-\chapter{LITERATURE REVIEW}
-\label{chapter2}
-This chapter provides a comprehensive review of the literature related to the research domain. The purpose of this chapter is to establish a strong theoretical and conceptual foundation for the study by examining existing research, identifying key contributions, and highlighting gaps in the current knowledge.
+\chapter{Research Framework}
+\label{ch:research_framework}
 
-A well-structured literature review not only summarizes previous work but also critically evaluates it to develop a coherent understanding of the research problem \cite{hart1998doing,webster2002analyzing}. This chapter also helps justify the need for the present study and supports the formulation of research objectives.
+This chapter formalizes the research problem and contributions. Section~\ref{sec:problem_statement} states the problem, Section~\ref{sec:research_objective} lists the research objectives, Section~\ref{sec:technical_challenges} identifies the technical challenges, Section~\ref{sec:contributions} summarizes the novelty and contributions, and Section~\ref{sec:evaluation_scope} defines the evaluation scope.
 
-The chapter is organized as follows: Section 2.1 discusses general concepts of literature review and referencing practices. Section 2.2 presents the historical background of the research area. Sections 2.3–2.5 describe major topics relevant to the study. Finally, Section 2.6 summarizes the findings and identifies research gaps.
+%% -------------------------------------------------
+\section{Problem Statement}
+\label{sec:problem_statement}
 
-% -------------------------------------------------
-\section{General [Citing and Reference Management]}
+Although RAG systems improve factual grounding by conditioning generation on retrieved evidence, they do not automatically guarantee that the generated answer is faithful to that evidence. A candidate response may still contain unsupported or contradictory information because the model can rely on parametric memory, misread the retrieved passage, or integrate the context only partially.
 
-The literature review process involves identifying, evaluating, and synthesizing information from relevant sources. It requires critical thinking and the ability to compare different studies to understand their strengths, weaknesses, and contributions. A good literature review should not simply describe previous work but should provide a structured argument that supports the research direction \cite{creswell2014research,booth2016craft}.
+The central problem addressed in this work is therefore not retrieval alone, but the \textbf{absence of an inference-time feedback mechanism} that links hallucination detection to corrective action. Existing systems may retrieve relevant passages and generate fluent answers, but without an internal reliability signal, they cannot decide whether to accept, retry, re-retrieve, or abstain before delivering the response.
 
-Proper citation and referencing are essential components of academic writing. They ensure that original authors receive credit for their work and allow readers to trace the source of information. Common citation styles include IEEE, APA, and Harvard formats. Reference management tools such as Mendeley and EndNote are widely used to organize references and generate bibliographies efficiently \cite{mendeley,endnote}.
+This study frames \emph{hallucination mitigation as a closed-loop control problem: internal activation signals are used to estimate hallucination risk, and that estimate is fed back into the RAG pipeline to control the final response}.
 
-Figure \ref{fig:ref_style} illustrates the structure of a typical reference entry.
+%% -------------------------------------------------
+\section{Research Objective}
+\label{sec:research_objective}
 
-\begin{figure}[!tbh]
-    \centering
-    \includegraphics[width=0.7\textwidth]{Images/fig21_referencing.jpg}
-    \vspace{0.5em}
-    \caption[Structure of a reference entry showing essential components such as author, year, title, and source.]{Structure of a reference entry showing essential components such as author, year, title, and source \cite{apa_author_date}.}
-    
-    \label{fig:ref_style}
-\end{figure}
+The objective of this study is to design and evaluate a closed-loop RAG system that can:
 
-% -------------------------------------------------
-\section{Historical Background}
+\begin{enumerate}
+    \item \emph{Extract internal activation features from transformer decoder layers during inference.}
+    \item \emph{Estimate a calibrated hallucination-risk probability from complementary residual-stream and FFN activation signals.}
+    \item \emph{Use this probability to decide whether a candidate response should be accepted, regenerated, supported by re-retrieval, or withheld.}
+    \item \emph{Evaluate whether the closed-loop controller reduces delivered hallucination risk while preserving answer utility.}
+    \item \emph{Test the framework across multiple decoder-only transformer backbones without modifying their core architectures.}
+\end{enumerate}
 
-This section provides an overview of the development of the research area. It includes early studies, significant theoretical advancements, and technological progress. Understanding the historical evolution of a topic helps in identifying trends and recognizing important contributions made by researchers over time.
+%% -------------------------------------------------
+\section{Technical Challenges}
+\label{sec:technical_challenges}
 
-Research methodology has evolved significantly, transitioning from purely theoretical approaches to more structured and systematic methods \cite{kothari2004research}. Over time, interdisciplinary approaches have also emerged, combining insights from multiple domains to solve complex problems.
+The proposed framework addresses three technical challenges.
 
-% -------------------------------------------------
-\section{Topic 1}
+\textbf{First}, hallucination detection and mitigation are usually treated as separate stages. A detector may assign a risk score to a generated response, but that score is often not connected to an automatic correction policy. This work links the detection signal directly to an inference-time controller.
 
-This section discusses the first major topic relevant to the research area. It presents various approaches proposed in the literature and compares their effectiveness. Emphasis is given to identifying the advantages and limitations of each method. Table \ref{tab:comparison_methods} summarizes key approaches commonly used in research studies.
+\textbf{Second}, the detection signal must be lightweight enough to support inference-time use. Instead of relying on multiple sampled generations or an external judge model, the proposed method uses internal activation features from the generating model itself.
 
-\begin{table}[!tbh]
-\centering
-\caption{Comparison of different approaches in literature}
-\label{tab:comparison_methods}
-\begin{tabular}{|c|c|c|}
-\hline
-\textbf{Method} & \textbf{Advantages} & \textbf{Limitations} \\
-\hline
-Qualitative Research & In-depth analysis & Subjective interpretation \\
-Quantitative Research & Objective measurement & Limited flexibility \\
-Mixed Methods & Comprehensive insight & Requires more resources \\
-\hline
-\end{tabular}
-\vspace{0.3em}
-\end{table}
+\textbf{Third}, the internal signal must capture more than one hallucination mechanism. Residual-stream features can reflect context integration, while FFN intermediate activations can reflect parametric-memory contributions. The framework therefore combines both CEV and IAV signals and evaluates whether their fusion improves hallucination-risk estimation.
 
-The choice of approach depends on the nature of the research problem and the objectives of the study \cite{creswell2014research}.
+%% -------------------------------------------------
+\section{Novelty and Contributions}
+\label{sec:contributions}
 
-% -------------------------------------------------
-\section{Topic 2}
+This work makes five main contributions.
 
-This section focuses on another important aspect of the research. It analyzes different frameworks, models, or methodologies used in similar studies. A comparison of these approaches helps in understanding their applicability and limitations.
+\noindent\textbf{Contribution~1 --- Dual-signal internal-state probing.} The framework combines two complementary activation sources: CEV features from the decoder residual stream and IAV features from the SwiGLU FFN intermediate activation. This design is motivated by the hypothesis that hallucination can arise both from weak context integration and from parametric-memory intrusion.
 
-Effective research design plays a crucial role in obtaining reliable and valid results. It involves selecting appropriate methods, defining variables, and ensuring that the study is structured logically \cite{kothari2004research}.
+\noindent\textbf{Contribution~2 --- Inference-time closed-loop control.} Instead of using hallucination detection only as a post-hoc score, the calibrated probe probability is used by a controller that determines whether the response should be accepted, regenerated, supported by re-retrieval, or abstained.
 
-% -------------------------------------------------
-\section{Topic 3}
+\noindent\textbf{Contribution~3 --- Multi-backbone evaluation.} The same framework is evaluated across Mistral-7B-Instruct-v0.2, LLaMA-3-8B-Instruct, and Qwen3-8B, allowing the study to examine whether the CEV/IAV probing strategy transfers across multiple decoder-only transformer families.
 
-This section highlights recent developments and emerging trends in the research domain. With advancements in technology and increasing availability of data, modern research methodologies have become more sophisticated.
+\noindent\textbf{Contribution~4 --- Reproducible evaluation protocol.} The study reports validation-set probe performance, closed-loop controller behavior, and out-of-domain transfer behavior, while explicitly separating validation-split results from comparisons against published test-set baselines.
 
-Researchers are increasingly adopting data-driven and interdisciplinary approaches to address complex problems. These approaches often provide improved accuracy and efficiency compared to traditional methods \cite{evans2014writing}.
+\noindent\textbf{Contribution~5 --- A parameter-efficient single mid-layer probe.} A controlled layer-wise ablation (Section~\ref{sec:layer_selection}) shows that reading the probe from a single mid-depth layer ($L/2$) matches or beats the originally deployed three-layer concatenation on every backbone while using about one-third of the probe parameters, giving a system-agnostic and cheaper detector.
 
-% -------------------------------------------------
-\section{Summary and Implications}
+%% -------------------------------------------------
+\section{Evaluation Scope}
+\label{sec:evaluation_scope}
 
-This section summarizes the key findings from the literature review and identifies gaps that need further investigation. A good research study should aim to address these gaps and contribute to the existing body of knowledge.
+The framework is evaluated at two levels.
 
-The performance of models and research outcomes is often evaluated using statistical metrics. One commonly used measure is the coefficient of determination ($R^2$), defined as:
+\emph{First}, the CEV and IAV probes are assessed as hallucination-risk detectors using a stratified RAGTruth validation split. Their individual and fused AUROC values are compared to determine whether dual-signal probing improves over either signal alone. The decoder depth that feeds the probes is itself selected empirically through a layer-wise ablation (Section~\ref{sec:layer_selection}) rather than assumed.
 
-\begin{equation}
-R^2 = 1 - \frac{\sum_{i=1}^{n} (y_i - \hat{y}_i)^2}
-{\sum_{i=1}^{n} (y_i - \bar{y})^2}
-\end{equation}
+\emph{Second}, the fused hallucination-risk estimate is used inside a closed-loop RAG controller. The controller is evaluated by observing how often it accepts, regenerates, re-retrieves, or abstains, and whether these decisions reduce the hallucination risk of delivered responses.
 
-Figure \ref{fig:research_gap} illustrates the concept of identifying research gaps by comparing existing studies and highlighting areas that require further investigation.
-
-
-\begin{figure}[!tbh]
-    \centering
-    \includegraphics[width=0.7\textwidth]{Images/fig22_referencing.jpg}
-    \vspace{0.5em}
-    \caption[Conceptual illustration of research gap showing limitations of existing studies and opportunities for future research.]{Conceptual illustration of research gap showing limitations of existing studies and opportunities for future research \cite{research_gap_blog}.}
-    \label{fig:research_gap}
-\end{figure}
-
-Based on the review, it is essential to formulate a research problem that addresses the identified limitations. The insights obtained from this chapter provide the foundation for the methodology and analysis presented in the subsequent chapters.
+All numerical results, including backbone-specific AUROC values and controller-branch statistics, are reported in the Results chapter (Chapter~\ref{ch:results}).

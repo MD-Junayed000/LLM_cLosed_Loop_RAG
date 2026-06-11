@@ -1,0 +1,111 @@
+\chapter{Failure Analysis}
+\label{ch:failure_analysis}
+
+This chapter analyzes weaker design choices and explains why the final configuration was chosen. Section~\ref{sec:failed_choices} discusses failed or weaker design choices. Section~\ref{sec:why_best} explains why the final configuration works best. Section~\ref{sec:backbone_strengths} presents backbone-level strengths and limitations, and Section~\ref{sec:alternative_methods} discusses why some alternative approaches were insufficient.
+
+%% -------------------------------------------------
+\section{Failed or Weaker Design Choices}
+\label{sec:failed_choices}
+
+\subsection{CEV-Only Probing}
+
+A CEV-only probe was evaluated as a residual-stream baseline. CEV-only probing matches the approach used in earlier hidden-state probing methods. The limitation is conceptual: when hallucination arises from parametric-memory intrusion, the relevant signal may appear most clearly inside the FFN before it is projected back into the residual stream.
+
+\textbf{Verdict:} CEV-only probing is useful but incomplete. It should remain as an ablation baseline.
+
+\subsection{IAV-Only Probing}
+
+IAV-only probing is the strongest single branch in the ablation results. This confirms that FFN intermediate activations carry substantial hallucination-relevant signal. However, some hallucinations arise from weak attention to retrieved evidence or poor context integration, which are better reflected in CEV.
+
+\textbf{Verdict:} IAV is the strongest individual signal, but fusion is more robust.
+
+\subsection{Unconstrained Fusion Search}
+
+An unconstrained fusion search can overfit to the stronger-looking branch on a particular validation fold, losing complementarity.
+
+\textbf{Verdict:} Fusion should be constrained to avoid collapse into single-signal behavior.
+
+\subsection{Mean Pooling Across All Tokens}
+
+Mean pooling over all generated tokens dilutes the hallucination-relevant signal that appears near the final decision state.
+
+\textbf{Verdict:} Last-token pooling is more appropriate for autoregressive decoder probing.
+
+\subsection{Three-Depth (Triple-Layer) Concatenation}
+
+Concatenating features from three proportional depths ($L/4$, $L/2$, $3L/4$) was the original design. In practice it was retired after the controlled layer-wise ablation in Section~\ref{sec:layer_selection}, which shows the three-depth concatenation never wins.
+
+\textbf{Verdict:} A single mid-depth ($L/2$) hook is the better choice and is adopted in the final system.
+
+\subsection{Hard Labels Without Label Smoothing}
+
+Training with hard one-hot labels makes the probe overconfident, which harms calibration. Label smoothing ($\varepsilon = 0.05$) reduces this overconfidence.
+
+\textbf{Verdict:} Label smoothing is useful because the controller needs calibrated probabilities.
+
+\subsection{Learned REINFORCE Controller}
+
+A learned REINFORCE-style policy controller was attempted but not retained. The rollout setting did not provide a stable enough reward signal.
+
+\textbf{Verdict:} The deterministic controller is preferable for the current study. Learned policies should be revisited with larger rollout budgets.
+
+%% -------------------------------------------------
+\section{Why the Final Configuration Works Best}
+\label{sec:why_best}
+
+\begin{table}[!htb]
+\centering
+\caption{Final design choices and the failures they address.}
+\label{tab:design_choices}
+\begin{tabular}{@{}p{5.5cm} p{8cm}@{}}
+\toprule
+\textbf{Final Design Choice} & \textbf{Failure Prevented} \\
+\midrule
+Dual CEV + IAV probing & Avoids missing either context-integration or FFN-memory signals \\
+Single mid-depth ($L/2$) hook & Best AUROC per parameter; avoids triple's ${\sim}3\times$ cost \\
+Last-token extraction & Preserves the final autoregressive decision state \\
+Separate CEV and IAV probes & Avoids forcing different vector spaces into one classifier \\
+Temperature calibration & Converts raw logits into usable probabilities \\
+Validation-tuned fusion & Combines signals while controlling over-reliance \\
+Label smoothing & Reduces overconfidence under noisy labels \\
+Backbone-specific thresholds & Accounts for different activation distributions \\
+Deterministic controller & Avoids unstable learned policy under sparse rewards \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The final architecture works because each design choice addresses a specific empirical or theoretical weakness observed in earlier variants.
+
+%% -------------------------------------------------
+\section{Backbone Strengths and Limitations}
+\label{sec:backbone_strengths}
+
+\begin{table}[!htb]
+\centering
+\caption{Backbone-level strengths and limitations.}
+\label{tab:backbone_strengths}
+\small
+\begin{tabular}{@{}l p{5.5cm} p{5.5cm}@{}}
+\toprule
+\textbf{Backbone} & \textbf{Strengths} & \textbf{Limitations} \\
+\midrule
+Mistral-7B & Strong fused AUROC; lowest delivered proxy; balanced 62\% acceptance & HaluEval polarity inversion; format-sensitive \\[4pt]
+Qwen3-8B & Best fused AUROC; largest reduction; aligned HaluEval transfer & Most conservative; lowest acceptance (42\%) \\[4pt]
+LLaMA-3-8B & Best HaluEval transfer; highest acceptance (90\%) & Smallest reduction; needed threshold fallback \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Backbone verdict:} There is no single winner. Mistral is the balanced choice, Qwen is best for safety-first, and LLaMA is best for answer utility. The per-backbone operational profiles are discussed further in Section~\ref{sec:backbone_behavior}; quantitative comparisons are consolidated in Table~\ref{tab:cross_model}.
+
+%% -------------------------------------------------
+\section{Why Some Alternative Approaches Were Insufficient}
+\label{sec:alternative_methods}
+
+\textbf{SelfCheckGPT-style consistency methods} require multiple sampled generations and can fail when the model consistently repeats the same incorrect answer. They measure sampling instability, not necessarily factual faithfulness to retrieved evidence.
+
+\textbf{External judge models} can provide strong verification, but they add cost, latency, and dependency on a separate model. This work instead focuses on using the generating model's own internal signals.
+
+\textbf{Retrieval improvement alone} is also insufficient. Better retrieval can help when the retrieved evidence is weak, but it cannot fix cases where the model ignores good evidence or fabricates despite relevant context.
+
+\textbf{Alternative-method verdict:} Retrieval improvement, black-box consistency, and external judging are useful but incomplete. The proposed system targets a different design point: lightweight, single-pass, internal-signal-driven hallucination control at inference time.

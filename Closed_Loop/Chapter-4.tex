@@ -1,104 +1,147 @@
-\chapter{RESULTS}
-\label{chapter4}
-This chapter presents the results obtained from the study. The results are organized in a structured manner to clearly demonstrate the findings derived from experiments, simulations, or analytical procedures. The purpose of this chapter is to provide factual and objective outcomes without interpretation, which will be discussed in the next chapter.
+\chapter{Background}
+\label{ch:background}
 
-This chapter is divided into different sections based on the objectives of the study. Each section presents results corresponding to specific aspects of the research.
+This chapter provides the technical background for the proposed method. Section~\ref{sec:decoder_arch} describes the transformer decoder architecture and the hook capture points. Section~\ref{sec:cev_iav_signals} defines the CEV and IAV signals. Section~\ref{sec:why_activations} explains why activations can be useful for hallucination detection, and Section~\ref{sec:illustrative_examples} provides illustrative CEV/IAV examples.
 
-% -------------------------------------------------
-\section{Overview of Results}
+%% -------------------------------------------------
+\section{Transformer Decoder Architecture and Hook Capture Points}
+\label{sec:decoder_arch}
 
-This section provides a general overview of the results. The findings are presented using tables, figures, and charts where appropriate. The results should be clear, concise, and directly related to the research objectives.
+A decoder-only transformer of the LLaMA/Mistral/Qwen family processes a token sequence $x_{1:t}$ through $L$ stacked decoder blocks. In a simplified pre-normalization form, decoder block $\ell$ can be written as:
 
-Figure \ref{fig:sample_result_plot} shows an example of graphical representation of experimental data.
+\begin{equation}
+    \mathbf{h}_\ell = \mathbf{h}_{\ell-1} + \text{MHA}\bigl(\text{RMSNorm}(\mathbf{h}_{\ell-1})\bigr)
+    \label{eq:mha}
+\end{equation}
 
-\begin{figure}[!tbh]
+\begin{equation}
+    \mathbf{h}_{\text{out}}^{(\ell)} = \mathbf{h}_\ell + \text{FFN}\bigl(\text{RMSNorm}(\mathbf{h}_\ell)\bigr)
+    \label{eq:ffn_residual}
+\end{equation}
+
+\noindent In this work, the block output $\mathbf{h}_{\text{out}}^{(\ell)}$ is used as the \textbf{Contextualized Embedding Vector (CEV)}. It represents the accumulated residual-stream state after attention and feed-forward processing at layer~$\ell$.
+
+For SwiGLU-based feed-forward networks, the FFN computation can be written as:
+
+\begin{equation}
+    \text{FFN}(\mathbf{x}) = W_{\text{down}} \Bigl( \text{SiLU}(W_{\text{gate}}\,\mathbf{x}) \odot (W_{\text{up}}\,\mathbf{x}) \Bigr)
+    \label{eq:swiglu}
+\end{equation}
+
+\noindent where $\odot$ denotes the element-wise (Hadamard) product. The bracketed gated term,
+
+\begin{equation}
+    \mathbf{z}_{\text{IAV}}^{(\ell)} = \text{SiLU}(W_{\text{gate}}\,\mathbf{x}) \odot (W_{\text{up}}\,\mathbf{x})
+    \label{eq:iav_def}
+\end{equation}
+
+\noindent is the \textbf{Intermediate Activation Vector (IAV)}. It is captured immediately before the final $W_{\text{down}}$ projection writes the FFN contribution back into the residual stream.
+
+\begin{figure}[!htb]
     \centering
-    \rule{0.7\textwidth}{5cm}
-    \vspace{0.5em}
-    \caption{Example plot showing variation of output parameter with respect to input condition.}
-    \label{fig:sample_result_plot}
+    \includegraphics[width=0.75\textwidth]{Images/Figure3_Single_Decoder_Block.png}
+    \caption[Decoder-block capture points for CEV and IAV.]{Decoder-block capture points for CEV and IAV. The CEV is captured from the decoder block output, after attention and FFN processing have contributed to the residual stream. The IAV is captured inside the SwiGLU FFN, immediately before the final down-projection.}
+    \label{fig:decoder_block}
 \end{figure}
 
-% -------------------------------------------------
-\section{Topic 1 Results}
+%% -------------------------------------------------
+\section{CEV and IAV Signals}
+\label{sec:cev_iav_signals}
 
-This section presents the results related to the first objective or topic of the study.
+The two activation signals are designed to capture complementary aspects of the model's computation.
 
-\subsection{Case 1}
+The \textbf{CEV} reflects the residual-stream state after the decoder block has integrated information through attention and feed-forward processing. It can therefore contain evidence about how the model has combined the retrieved context, query, and generated sequence.
 
-Describe the results obtained for Case 1. Provide detailed observations supported by data.
+The \textbf{IAV} reflects the FFN intermediate activation before the feed-forward contribution is written back into the residual stream. This is theoretically motivated by prior mechanistic-interpretability work showing that FFN layers can behave like key-value memories and can participate in storing or expressing factual associations~\cite{geva2021ffn,meng2022locating}.
 
-\begin{figure}[!tbh]
+In this study, CEV and IAV features are extracted from a single mid-depth decoder layer at approximately $L/2$. The last-token activation at that layer is pooled and passed to lightweight MLP probes, whose calibrated outputs are fused into a hallucination-risk score. Section~\ref{sec:layer_selection} reports the layer-wise ablation that motivates using one mid-depth layer instead of a multi-depth concatenation.
+
+\begin{figure}[!htb]
     \centering
-    \rule{0.65\textwidth}{4.5cm}
-    \vspace{0.5em}
-    \caption{Result visualization for Topic 1 - Case 1.}
-    \label{fig:topic1_case1}
+    \includegraphics[width=0.80\textwidth]{Images/cev_iav.jpeg}
+    \caption[Simplified view of CEV and IAV extraction across decoder blocks.]{Simplified view of CEV and IAV extraction across decoder blocks. The green region represents residual-stream CEV features, while the red region represents intermediate FFN IAV features. The diagram is conceptual and omits normalization layers for clarity.}
+    \label{fig:cev_iav_overview}
 \end{figure}
 
-\subsection{Case 2}
+%% -------------------------------------------------
+\section{Why Activations Can Be Useful for Hallucination Detection}
+\label{sec:why_activations}
 
-Describe the results obtained for Case 2. Highlight any variations or differences observed compared to Case 1.
+The motivation for activation probing comes from two related observations.
 
-\begin{table}[!tbh]
-\centering
-\caption{Comparison of results for different cases under Topic 1}
-\label{tab:topic1_cases}
-\begin{tabular}{|c|c|c|}
-\hline
-\textbf{Case} & \textbf{Parameter Value} & \textbf{Output Result} \\
-\hline
-Case 1 & Value 1 & Result 1 \\
-Case 2 & Value 2 & Result 2 \\
-\hline
-\end{tabular}
-\vspace{0.3em}
-\end{table}
+\textbf{First}, the \emph{residual stream} acts as an accumulated representational state. At later layers, it reflects not only token identity but also how the model has integrated the prompt, retrieved context, and generated response. Prior work has shown that hidden activations can contain information related to factuality and truthfulness~\cite{azaria2023saplma}.
 
-% -------------------------------------------------
-\section{Topic 2 Results}
+\textbf{Second}, \emph{FFN layers} are not merely generic nonlinear transformations. Mechanistic-interpretability studies suggest that transformer FFN layers can behave like key-value memories, where input patterns activate stored associations that influence the output-token distribution~\cite{geva2021ffn}. Factual associations can also be localized and edited through MLP/FFN modules~\cite{meng2022locating}. These findings motivate inspecting the IAV signal as a possible indicator of parametric-memory contribution.
 
-This section presents the results related to the second objective or topic.
+This does not imply that CEV or IAV alone can perfectly identify hallucination. Instead, the working hypothesis is that the two signals provide \emph{complementary evidence}: CEV captures context-integration behavior, while IAV captures feed-forward activation patterns associated with parametric knowledge use.
 
-\subsection{Case 1}
+%% -------------------------------------------------
+\section{Illustrative CEV/IAV Examples}
+\label{sec:illustrative_examples}
 
-Provide details of the observed results. Include graphs, images, or numerical data where necessary.
+The following examples are illustrative and are intended to clarify how the probe uses CEV and IAV features. The shown vector values are truncated for readability and should not be interpreted as individual neuron explanations.
 
-\begin{figure}[!tbh]
-    \centering
-    \rule{0.65\textwidth}{4.5cm}
-    \vspace{0.5em}
-    \caption{Result visualization for Topic 2 - Case 1.}
-    \label{fig:topic2_case1}
-\end{figure}
+\subsection{Grounded Response}
 
-\subsection{Case 2}
+\begin{groundedbox}[$\checkmark$ Example 4.4.1: Grounded Response --- ACCEPT]
+\textbf{Query:} ``What year did the Treaty of Westphalia end the Thirty Years' War?''\\[4pt]
+\textbf{Retrieved context:} ``The Peace of Westphalia was signed in 1648 and ended the Thirty Years' War.''\\[4pt]
+\textbf{Generated response:} ``The Treaty of Westphalia ended the Thirty Years' War in 1648.''\\[4pt]
+\textbf{Expected label:} Grounded / non-hallucinated.
+\end{groundedbox}
 
-Present the results for Case 2 and compare it with Case 1 if applicable.
+\begin{activationbox}[Illustrative Activation Pattern]
+\textit{CEV at layer~16 (4096-dim vector, truncated):}\\
+$\uparrow$ High positive values in ``factual recall'' dimensions\\
+$\uparrow$ Pattern: consistent with context-supported generation\\[6pt]
+\textit{IAV at layer~16 (14336-dim, MLP pre-down\_proj, truncated):}\\
+$\uparrow$ Strongly activated ``historical date'' neurons\\
+$\uparrow$ Pattern: MLP is injecting a well-encoded factual year
+\end{activationbox}
 
-% -------------------------------------------------
-\section{Topic 3 Results}
+\vspace{0.4em}
+\noindent\textbf{Controller decision:} $p_{\text{hallucination}} = 0.33 < \theta_{\text{hallu}} = 0.62 \;\Rightarrow\;$ \textcolor{acceptgreen}{\textbf{ACCEPT}}.
 
-This section presents results related to the third objective or research component.
+\subsection{Hallucinated Response}
 
-\subsection{Case 1}
+\begin{hallucinatedbox}[$\boldsymbol{\times}$ Example 4.4.2: Hallucinated Response --- ABSTAIN]
+\textbf{Query:} ``What is the official 2024 census population of the lost city of Atlantis?''\\[4pt]
+\textbf{Retrieved context:} ``A 2024 census of South Atlantic territories found populations across several islands.''\\[4pt]
+\textbf{Generated response:} ``According to the 2024 census, Atlantis had a population of 140,634.''\\[4pt]
+\textbf{Expected label:} Hallucinated / unsupported.
+\end{hallucinatedbox}
 
-Provide the data obtained and explain the observations.
+\begin{activationbox}[Illustrative Activation Pattern]
+$\uparrow$ Weak, mixed activation --- no strong factual grounding signal\\
+$\uparrow$ Context was irrelevant; residual stream shows low coherence\\
+$\uparrow$ ``census'' and ``number'' neurons partially fire\\
+$\uparrow$ But ``Atlantis'' + ``population'' activates confabulation patterns\\
+$\uparrow$ IAV encodes ``fabricating a plausible number from context pattern''
+\end{activationbox}
 
-\subsection{Case 2}
+\vspace{0.4em}
+\noindent\textbf{Controller decision:} $p_{\text{hallucination}} = 0.78 \geq \theta_{\text{abs}} = 0.75 \;\Rightarrow\;$ \textcolor{abstainred}{\textbf{ABSTAIN}}.
 
-Present comparative or additional results.
+\subsection{Failure Case: Plausible but Unsupported Extraction}
 
-% -------------------------------------------------
-\section{Summary of Results}
+\begin{failurebox}[$\triangle$ Example 4.4.3: Failure Case --- False ACCEPT]
+\textbf{Query:} ``What did I have for breakfast yesterday?''\\[4pt]
+\textbf{Retrieved context:} ``Common breakfast foods include eggs, toast, coffee, and fruit.''\\[4pt]
+\textbf{Generated response:} ``Based on the context, you had eggs, toast, and coffee.''\\[4pt]
+\textbf{Expected label:} Hallucinated / unsupported.\\[4pt]
+\textbf{Why this is difficult:} The retrieved passage is only topically related and lacks the specific user fact required. The model treats generic context as supporting evidence.
+\end{failurebox}
 
-This section provides a summary of key findings from all sections of this chapter. The summary should highlight important trends, variations, or patterns observed in the results.
+\begin{activationbox}[Illustrative Activation Pattern]
+$\uparrow$ \textbf{IDENTICAL} to the factual grounding pattern!\\
+$\uparrow$ The model found relevant context (``breakfast foods'') and extracted an answer\\
+$\uparrow$ Its hidden state looks like factual retrieval\\
+$\uparrow$ ``Food'' + ``list'' neurons strongly activated\\
+$\uparrow$ MLP is injecting a food list --- looks exactly like answering a factual question
+\end{activationbox}
 
-For example:
-\begin{itemize}
-    \item Key trend observed in the data
-    \item Comparison between different cases
-    \item Notable patterns or anomalies
-\end{itemize}
+\vspace{0.4em}
+\noindent\textbf{Controller decision:} $p_{\text{hallucination}} = 0.42 < \theta_{\text{hallu}} = 0.62 \;\Rightarrow\;$ \textcolor{abstainred}{\textbf{ACCEPT} $\boldsymbol{\times}$ (WRONG)}.
 
-The results presented in this chapter will be further analyzed and interpreted in the next chapter.
+\vspace{0.5em}
+This example clarifies that the proposed probe is not a perfect factuality oracle. It estimates hallucination risk from internal activation patterns, but it may fail when the model performs plausible extraction from context that is relevant but insufficient.

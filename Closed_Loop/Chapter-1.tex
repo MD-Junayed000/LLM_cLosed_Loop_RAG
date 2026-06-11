@@ -1,54 +1,60 @@
 \chapter{Introduction}
-\label{sec:introduction}
+\label{ch:introduction}
 
-This is the first chapter of the thesis. To craft a well-structured and meaningful thesis, it is essential to understand the overall organization and purpose of each section. The Introduction chapter establishes the foundation of the research by presenting the background, context, objectives, significance, and structure of the study. It aims to provide the reader with a clear understanding of what the research is about, why it is important, and how it will be carried out.
+This chapter establishes the foundation and motivation for this research. Section~\ref{sec:hallucination_problem} introduces the hallucination problem in Retrieval-Augmented Generation. Section~\ref{sec:why_hooks} explains the forward-hook mechanism that enables internal-state access.
 
-In the opening section, an overview of the chapter contents should be provided. For example:
+%% -------------------------------------------------
+\section{The Hallucination Problem in RAG}
+\label{sec:hallucination_problem}
 
-This chapter outlines the background (Section 1.1) and context (Section 1.2) of the research and its objectives (Section 1.3). Section 1.4 discusses the significance, scope, and definitions related to the study. Finally, Section 1.5 presents the overall organization of the Thesis.
+\begin{figure}[!htb]
+    \centering
+    \includegraphics[width=0.85\textwidth]{Images/Figure1.png}
+    \caption[Conceptual comparison between standard open-loop RAG and the proposed closed-loop RAG pipeline.]{Conceptual comparison between standard open-loop RAG and the proposed closed-loop RAG pipeline. In standard RAG, the generated answer is returned without an internal reliability check. In the proposed system, internal activation probes estimate hallucination risk and route the answer through a controller.}
+    \label{fig:open_vs_closed}
+\end{figure}
 
-% -------------------------------------------------
-\section{Background}
+Figure~\ref{fig:open_vs_closed} summarizes the motivation for this work. A standard RAG pipeline retrieves context, generates an answer, and returns the answer without verifying whether the generation is actually grounded in the retrieved evidence. This creates an \textbf{open-loop failure mode}: hallucinated content can reach the user even when the system has access to relevant documents.
 
-Provide the background of the problem to be explored in the study and describe what motivated the research. This may include a discussion of technological trends, theoretical developments, unresolved issues, or practical challenges relevant to the topic. The background section should help the reader understand how the research area has evolved and why the chosen topic is worth investigating.
+The proposed pipeline adds an internal feedback stage. During generation, forward hooks extract activation features from the LLM, and lightweight probes convert those features into a hallucination-risk estimate. The controller then uses this estimate to decide whether to accept the answer, retry generation, perform re-retrieval, or abstain. The probability shown in the figure is illustrative and represents the type of signal used by the controller, not a universal threshold.
 
-% -------------------------------------------------
-\section{Context}
+This study therefore focuses on \emph{closing the gap between hallucination detection and hallucination mitigation}: rather than only scoring a response after generation, the system uses the score to control the inference-time RAG loop.
 
-Outline the context of the study by identifying the specific focus areas of the research. Provide a clear statement of the problem, including the existing limitations, challenges, or gaps that the study aims to address. This section should clearly define the research problem and justify why it requires investigation.
+%% -------------------------------------------------
+\section{Why Hooks?}
+\label{sec:why_hooks}
 
-% -------------------------------------------------
-\section{Aims and Objectives}
+Before describing the full closed-loop system, it is necessary to explain how the model's internal states are accessed. This work uses \textbf{PyTorch forward hooks}, which allow selected intermediate tensors to be observed during a model's forward pass without changing the model's computation.
 
-Define the overall aim (or purpose) of the research and list the specific objectives that will help achieve this aim. The objectives should be clear, concise, and measurable. They may include design, analysis, experimentation, modelling, or evaluation tasks depending on the nature of the study.
+\subsection{What Is a Forward Hook?}
+\label{subsec:forward_hook}
 
-Where appropriate, research questions or hypotheses may also be stated to guide the investigation.
+A forward hook is a callback function attached to a neural-network module. When the module is executed, the hook receives the module input or output and can store a copy for analysis. In this study, hooks are used \emph{passively}: they record detached activation tensors during inference and do not modify the model output, decoding process, or parameter values.
 
-% -------------------------------------------------
-\section{Significance, Scope and Definitions}
+This makes hooks suitable for internal-state probing. Rather than relying only on generated text or token probabilities, the system can inspect representations formed inside the decoder while the model processes the retrieved context and generates an answer.
 
-Discuss the significance of the research by explaining how the study contributes to the existing body of knowledge or solves a practical problem. Clearly highlight the importance of the topic in academic, industrial, or societal contexts.
+\begin{figure}[!htb]
+    \centering
+    \includegraphics[width=0.70\textwidth]{Images/Figure2_Hook.png}
+    \caption[Forward hook as a non-invasive activation tap.]{Forward hook as a non-invasive activation tap. A hook copies an intermediate activation from a selected decoder layer while the forward pass continues unchanged. The copied activation is passed to a lightweight probe, which estimates hallucination risk for the closed-loop controller.}
+    \label{fig:forward_hook}
+\end{figure}
 
-Define the scope of the research by stating the boundaries and limitations of the study. This may include constraints related to methodology, data, tools, assumptions, or experimental conditions.
+\subsection{Why Hooks Are Needed in This System}
+\label{subsec:hooks_needed}
 
-Provide definitions of key terms, variables, or concepts used throughout the Thesis. This ensures clarity and consistency for readers. More detailed or operational definitions may be provided in later chapters.
+The proposed system requires two complementary internal signals:
 
-% -------------------------------------------------
-\section{Structure of the Thesis}
+\begin{enumerate}
+    \item \textbf{Contextualized Embedding Vector (CEV):} the residual-stream output of a decoder block, representing the accumulated contextual state after attention and feed-forward processing.
+    \item \textbf{Intermediate Activation Vector (IAV):} the SwiGLU feed-forward intermediate activation before the final $W_{\text{down}}$ projection, representing the FFN signal before it is written back into the residual stream.
+\end{enumerate}
 
-Outline the structure of the remaining chapters of the Thesis. Provide a brief description of the content of each chapter to guide the reader.
+These two tensors are not equally accessible through standard model outputs. Residual hidden states can usually be returned with \texttt{output\_hidden\_states=True}, but the intermediate SwiGLU activation inside the feed-forward sublayer is not exposed by default. Forward hooks are therefore required to capture the IAV signal directly.
 
-For example:
+In the experiments, a single forward hook is registered at one mid-depth decoder layer, approximately $\ell^* = \lfloor L/2 \rfloor$. The CEV and IAV features from that layer are scored by lightweight MLP probes, and the resulting hallucination-risk estimate is passed to the closed-loop controller. Using one mid-depth layer rather than concatenating several depths is justified empirically by the layer-wise ablation in Section~\ref{sec:layer_selection}.
 
-Chapter~\ref{chapter2} reviews the relevant literature and theoretical background related to the research problem.
+\subsection{Why Not Just Read Hidden States After Inference?}
+\label{subsec:why_not_after}
 
-Chapter~\ref{chapter3} describes the materials, methodology, and research design adopted in the study.
-
-Chapter~\ref{chapter4} presents the results obtained from experiments, simulations, or analyses.
-
-Chapter~\ref{chapter5} provides discussion and interpretation of the results in relation to the research objectives and existing literature.
-
-Chapter~\ref{chapter6} concludes the Thesis by summarizing key findings, highlighting limitations, and suggesting directions for future research.
-
-
-
+Standard HuggingFace APIs expose only final-layer hidden states or optionally all residual-stream states. They do \emph{not} expose intermediate FFN activations (the IAV signal) without custom code. Forward hooks provide a clean, non-invasive mechanism to capture \emph{any} intermediate tensor---including the SwiGLU gated intermediate---during the live forward pass. This is why hooks are essential for this dual-signal probing architecture.

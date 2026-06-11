@@ -1,0 +1,52 @@
+\chapter{Conclusion}
+\label{ch:conclusion}
+
+This work introduced a closed-loop Retrieval-Augmented Generation framework that connects internal-state hallucination detection with inference-time correction. Rather than using a detector only to score generated responses after the fact, the proposed system feeds the calibrated hallucination-risk estimate back into the RAG loop through a deterministic controller that can accept, regenerate, re-retrieve, or abstain.
+
+The system instruments frozen decoder-only language models with PyTorch forward hooks and extracts two complementary activation signals: \textbf{Contextualized Embedding Vectors (CEV)} from the residual stream and \textbf{Intermediate Activation Vectors (IAV)} from the SwiGLU feed-forward sublayer. Separate lightweight MLP probes are trained on RAGTruth hallucination labels and fused into a calibrated hallucination probability that drives the closed-loop controller.
+
+Across three open-weight decoder backbones, the fused CEV/IAV probe achieves strong RAGTruth validation performance: \textbf{0.8596 AUROC} for Mistral-7B-Instruct-v0.2, \textbf{0.8808 AUROC} for Qwen3-8B, and \textbf{0.8689 AUROC} for LLaMA-3-8B-Instruct. These results surpass all published and reproduced baseline detectors considered in this study, while being the only method with closed-loop control capability.
+
+The closed-loop evaluation demonstrates that internal hallucination scores can be used not only for detection but also for controlling system behavior: the controller reduces delivered hallucination risk across all three backbones, with the per-backbone safety--utility trade-off summarized in Table~\ref{tab:cross_model} and Section~\ref{sec:safety_utility}.
+
+The HaluEval analysis further shows that probe transfer is distribution-dependent. Qwen3-8B and LLaMA-3-8B-Instruct preserve aligned out-of-domain discrimination, while Mistral-7B-Instruct-v0.2 shows strong polarity inversion. This finding highlights the need for target-domain validation or recalibration before deployment in new settings.
+
+\textbf{Future work} should prioritize evaluation on the official RAGTruth test split, multi-seed replication across all backbones, stronger target-domain calibration, content-quality checks for omission and relevance failures, and extension to non-SwiGLU architectures.
+
+%% -------------------------------------------------
+\section{Architecture-Agnostic Scope}
+\label{sec:agnostic_scope}
+
+The proposed framework is \textbf{architecture-agnostic in design}, but \textbf{not weight-transfer agnostic}.
+
+It is architecture-agnostic because the same overall procedure is used across all evaluated backbones:
+\begin{enumerate}
+    \item Register hooks at proportional decoder depths.
+    \item Extract CEV and IAV features.
+    \item Train CEV and IAV MLP probes.
+    \item Calibrate and fuse probe probabilities.
+    \item Feed the fused hallucination-risk score into the same closed-loop controller.
+\end{enumerate}
+
+However, the trained probe weights do not transfer directly across backbones. Each model has its own activation geometry, hidden-state scale, tokenizer behavior, and FFN intermediate dimension. Therefore, the framework is reusable, but each deployment requires backbone-specific probe training and threshold calibration.
+
+\begin{table}[!htb]
+\centering
+\caption{What stays fixed and what changes across models.}
+\label{tab:agnostic}
+\begin{tabular}{@{}lcp{7cm}@{}}
+\toprule
+\textbf{Component} & \textbf{Agnostic?} & \textbf{Explanation} \\
+\midrule
+Hooking strategy    & Yes   & Hooks placed at proportional depths $L/4$, $L/2$, $3L/4$ \\
+CEV/IAV concept     & Yes   & Same residual-stream and FFN intermediate signals \\
+Probe architecture  & Mostly & Same MLP structure; input dimension varies \\
+Controller logic    & Yes   & Same four-action policy \\
+Threshold values    & No    & Calibrated separately per backbone \\
+Probe weights       & No    & Each backbone requires separate training \\
+Input dimensions    & No    & Depend on hidden size and FFN intermediate size \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Final agnosticity statement:} The system is architecturally reusable across related decoder-only transformer families, but each backbone requires its own probe weights and calibration thresholds.

@@ -1,32 +1,170 @@
 \clearpage
 \appendix
 
-% ------ Appendix Heading ------
 \chapter*{Appendices}
 \addcontentsline{toc}{chapter}{Appendices}
 \markboth{Appendices}{Appendices}
 
-\vspace{0.8cm}
+%% ======================================================
+\section*{Appendix A. Reproducibility and Execution Notes}
+\addcontentsline{toc}{section}{Appendix A. Reproducibility and Execution Notes}
 
-% ------ Appendix A ------
-\begin{center}
-\textbf{Appendix A: [Title of First Appendix]}
-\end{center}
+\subsection*{A.1 Execution Environment}
 
-\vspace{0.5cm}
+All backbone-specific experiments were executed on Google Colab using an NVIDIA A100 GPU (40\,GB, FP16). The language-model backbones were kept frozen throughout; only the lightweight hallucination probes were trained. The comparison and visualization notebook loaded exported metrics and generated cross-model tables and figures.
 
-\noindent Start each appendix on a new page. Place appendices in the same order as they are referred to in the body of the Thesis. That is, the first appendix referred to should be Appendix A, the second appendix referred to should be Appendix B, and so on. Appendix formatting can be different to the main document. Refer to \textit{Thesis PAM} for information about appendix figures and tables.
+The final experimental pipeline:
+\[
+    \text{Frozen LLM} \to \text{CEV/IAV extraction} \to \text{Probe training} \to \text{Calibration} \to \text{Fusion} \to \text{Controller}
+\]
 
-\vspace{1cm}
+\subsection*{A.2 Frozen-Backbone Setting}
 
-% ------ Appendix B ------
-\begin{center}
-\textbf{Appendix B: [Title of First Appendix]}
-\end{center}
+\begin{table}[!htb]
+\centering
+\caption*{Component trainability.}
+\begin{tabular}{@{}llp{7cm}@{}}
+\toprule
+\textbf{Component} & \textbf{Trainable} & \textbf{Function} \\
+\midrule
+LLM backbone        & No    & Generates candidate responses \\
+Retriever / FAISS   & No    & Provides external evidence \\
+CEV probe           & Yes   & Scores residual-stream hallucination risk \\
+IAV probe           & Yes   & Scores FFN-activation hallucination risk \\
+Temperature params  & Tuned & Calibrate probe probabilities \\
+Fusion weight       & Tuned & Combines CEV and IAV probabilities \\
+Controller          & No    & Applies deterministic threshold policy \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-\vspace{0.8cm}
+%% ======================================================
+\section*{Appendix B. Implementation Details and Memory Management}
+\addcontentsline{toc}{section}{Appendix B. Implementation Details and Memory Management}
 
-% ------ Appendix C ------
-\begin{center}
-\textbf{Appendix C: [Title of First Appendix]}
-\end{center}
+\subsection*{B.1 Sources of Memory Pressure}
+
+\begin{table}[!htb]
+\centering
+\caption*{Sources of GPU memory pressure.}
+\begin{tabular}{@{}lp{9cm}@{}}
+\toprule
+\textbf{Source} & \textbf{Explanation} \\
+\midrule
+Hook tensors on GPU & Captured activations accumulate if not detached \\
+Long sequences & Longer outputs increase activation memory \\
+Retriever co-residency & Both on GPU increases peak VRAM \\
+Verbose generations & Thinking-style outputs increase length \\
+Unremoved hooks & Stale references accumulate \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection*{B.2 Engineering Mitigations}
+
+\begin{table}[!htb]
+\centering
+\caption*{Memory-management mitigations.}
+\begin{tabular}{@{}lp{8cm}@{}}
+\toprule
+\textbf{Issue} & \textbf{Mitigation} \\
+\midrule
+Vocabulary-logit spike & Use base transformer module; avoid lm\_head logits \\
+Hook tensors & \texttt{.detach().cpu().float()} immediately \\
+Hook accumulation & Remove hooks after each extraction pass \\
+Retriever VRAM & Move retrieval components to CPU during extraction \\
+Long sequences & Apply maximum token caps \\
+Degenerate outputs & 4-gram repetition detector \\
+Scale mismatch & Z-score normalize using training-set statistics \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%% ======================================================
+\section*{Appendix C. Degeneration and Artifact Handling}
+\addcontentsline{toc}{section}{Appendix C. Degeneration and Artifact Handling}
+
+\subsection*{C.1 Repetition Guard}
+
+A 4-gram repetition ratio is used to detect degenerate generation loops:
+\begin{equation*}
+    r_{\text{4-gram}} = 1 - \frac{\text{\# unique 4-grams}}{\text{\# total 4-grams}}
+\end{equation*}
+A higher value indicates more repetition. If exceeded, the output is routed toward regeneration or abstention.
+
+\subsection*{C.2 Model-Specific Output Cleaning}
+
+\begin{table}[!htb]
+\centering
+\caption*{Backbone-specific cleaning rules.}
+\begin{tabular}{@{}lp{9cm}@{}}
+\toprule
+\textbf{Backbone} & \textbf{Cleaning Step} \\
+\midrule
+Mistral-7B & Remove repetitive artifacts, malformed continuations \\
+Qwen3-8B & Remove thinking-mode/hidden-reasoning artifacts \\
+LLaMA-3-8B & Minimal cleaning required \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%% ======================================================
+\section*{Appendix D. Unused Learned Policy Component}
+\addcontentsline{toc}{section}{Appendix D. Unused Learned Policy Component}
+
+\subsection*{D.1 PolicyNetwork Design}
+
+An optional learned policy controller was explored but not retained. The proposed policy state was:
+\[
+    \mathbf{s} = (p_{\text{fused}},\; p_{\text{CEV}},\; p_{\text{IAV}},\; q_{\text{ret}},\; a / N_{\max})
+\]
+The learned policy produced a softmax distribution over \{\textsc{Regenerate}, \textsc{Re-Retrieve}, \textsc{Abstain}\}. The \textsc{Accept} decision remained threshold-based.
+
+\subsection*{D.2 REINFORCE Exploration}
+
+\begin{table}[!htb]
+\centering
+\caption*{Causes of REINFORCE failure.}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Cause} & \textbf{Effect} \\
+\midrule
+Limited rollout queries & High-variance policy estimates \\
+Sparse reward signal & Weak learning signal \\
+No direct ground truth & Difficult reward assignment \\
+Stochastic generation & Unstable policy updates \\
+Added runtime cost & No clear improvement \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%% ======================================================
+\section*{Appendix E. Deterministic Controller Pseudocode}
+\addcontentsline{toc}{section}{Appendix E. Deterministic Controller Pseudocode}
+
+\begin{pseudocodebox}[Deterministic Controller --- Final System]
+\begin{tabbing}
+\hspace{0.5cm}\=\hspace{0.5cm}\=\kill
+\textbf{Input:}\\
+\> $p_{\text{fused}}$ \> calibrated hallucination-risk probability\\
+\> $q_{\text{ret}}$ \> retrieval-quality score\\
+\> $\text{attempts}$ \> current retry count\\
+\> $\theta_{\text{hallu}}$ \> intervention threshold\\
+\> $\theta_{\text{abs}}$ \> abstention threshold\\
+\> $\theta_{\text{ret}}$ \> retrieval-quality threshold\\
+\> $\text{max\_retries}$ \> maximum allowed attempts\\[8pt]
+\textbf{Algorithm:}\\
+\> \textbf{if} attempts $\geq$ max\_retries:\\
+\>\> \textbf{return} \textcolor{abstainred}{ABSTAIN}\\[3pt]
+\> \textbf{if} $p_{\text{fused}} < \theta_{\text{hallu}}$:\\
+\>\> \textbf{return} \textcolor{acceptgreen}{ACCEPT}\\[3pt]
+\> \textbf{if} $p_{\text{fused}} \geq \theta_{\text{abs}}$:\\
+\>\> \textbf{return} \textcolor{abstainred}{ABSTAIN}\\[3pt]
+\> \textbf{if} $q_{\text{ret}} < \theta_{\text{ret}}$:\\
+\>\> \textbf{return} \textcolor{regenblue}{RE-RETRIEVE}\\[3pt]
+\> \textbf{return} \textcolor{regenblue}{REGENERATE}
+\end{tabbing}
+\end{pseudocodebox}
+
+\vspace{0.5em}
+\noindent The deterministic controller is interpretable, auditable, and directly aligned with the closed-loop RAG action space.
