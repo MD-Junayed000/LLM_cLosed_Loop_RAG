@@ -36,22 +36,78 @@ HalluRAG & 1{,}098 & Supplementary & Mistral & No & No & Sentence-level examples
 \subsection{RAGTruth-18K: Primary Probe Supervision}
 \label{sec:ragtruth}
 
-RAGTruth~\cite{wu2024ragtruth} gives us response-level hallucination labels for RAG-generated text. We convert these into a simple binary scheme: $y = 0$ means the response is grounded (supported by the retrieved context), and $y = 1$ means it is hallucinated (unsupported or contradictory). This dataset provides the training signal and validation benchmark for our probes.
+RAGTruth~\cite{wu2024ragtruth} is the backbone of our probe training pipeline. It provides response-level hallucination labels for RAG-generated text across multiple task types—summarization, question answering, and data-to-text generation. The dataset was originally constructed by prompting several LLMs with retrieved passages and then annotating whether each generated response was faithful to the evidence or contained hallucinated claims.
+
+We convert the multi-class annotation scheme into a binary label: $y = 0$ for grounded (the response is supported by the retrieved context) and $y = 1$ for hallucinated (unsupported or contradictory). After processing, we obtain 15{,}090 training examples and 3{,}058 validation examples in a stratified 80/20 split that preserves the class ratio across both partitions.
+
+\begin{dataformatbox}[RAGTruth Example --- Grounded]
+\small
+\textbf{Task type:} Question Answering\\[3pt]
+\textbf{Retrieved context:} ``The Treaty of Versailles was signed on 28 June 1919. It ended the state of war between Germany and the Allied Powers.''\\[3pt]
+\textbf{Query:} ``When was the Treaty of Versailles signed?''\\[3pt]
+\textbf{Generated response:} ``The Treaty of Versailles was signed on 28 June 1919, formally ending World War I.''\\[3pt]
+\textbf{Label:} \textcolor{acceptgreen}{\textbf{0 (Grounded)}} --- response is directly supported by the passage.
+\end{dataformatbox}
+
+\vspace{0.4em}
+
+\begin{dataformatbox}[RAGTruth Example --- Hallucinated]
+\small
+\textbf{Task type:} Question Answering\\[3pt]
+\textbf{Retrieved context:} ``Solar panels convert sunlight into electricity using photovoltaic cells.''\\[3pt]
+\textbf{Query:} ``How efficient are modern solar panels?''\\[3pt]
+\textbf{Generated response:} ``Modern solar panels achieve 45\% efficiency in laboratory conditions and 30\% in residential installations.''\\[3pt]
+\textbf{Label:} \textcolor{abstainred}{\textbf{1 (Hallucinated)}} --- the efficiency numbers are fabricated; the passage says nothing about percentages.
+\end{dataformatbox}
 
 \subsection{SQuAD v1.1: Retrieval Corpus and Operational QA Source}
 \label{sec:squad}
 
-SQuAD v1.1~\cite{rajpurkar2016squad} pulls double duty. Its 25{,}000 training-set contexts become the FAISS retrieval index—the knowledge base from which our system pulls evidence at inference time. Meanwhile, its validation QA pairs supply the operational queries we use to test the full closed-loop pipeline.
+SQuAD v1.1~\cite{rajpurkar2016squad} is one of the most widely used reading comprehension benchmarks, containing over 100{,}000 question-answer pairs drawn from Wikipedia articles. In our pipeline, it serves a dual purpose that leverages different parts of the dataset for different functions.
+
+\textbf{As a retrieval corpus:} We take 25{,}000 context passages from the SQuAD training set, encode them with the BGE embedding model, and index them in FAISS. This becomes the knowledge base from which our system retrieves evidence at inference time. The passages cover diverse topics—history, science, literature, geography—giving the retriever a reasonable breadth of knowledge.
+
+\textbf{As an operational QA source:} The 10{,}570 validation question-answer pairs provide the queries on which we test the full closed-loop pipeline. Each query has a known reference answer, which allows us to compute token-level F1 as an optional utility check (though AUROC on the probe is our primary metric).
+
+\begin{dataformatbox}[SQuAD v1.1 Example Format]
+\small
+\textbf{Context passage:} ``Nikola Tesla (10 July 1856 -- 7 January 1943) was a Serbian-American inventor, electrical engineer, mechanical engineer, and futurist best known for his contributions to the design of the modern alternating current (AC) electricity supply system.''\\[3pt]
+\textbf{Question:} ``What is Nikola Tesla best known for?''\\[3pt]
+\textbf{Reference answer:} ``his contributions to the design of the modern alternating current (AC) electricity supply system''\\[3pt]
+\textbf{Usage in our pipeline:} Context $\to$ FAISS index; Question $\to$ closed-loop query; Reference answer $\to$ F1 utility check.
+\end{dataformatbox}
 
 \subsection{HaluEval-QA: Out-of-Distribution Evaluation}
 \label{sec:halueval_dataset}
 
-HaluEval~\cite{li2023halueval} pairs correct answers with hallucinated alternatives. We score both with our trained probes and measure AUROC—can the probe tell them apart even though it was never trained on this data? This is our primary generalization test.
+HaluEval~\cite{li2023halueval} was specifically designed to benchmark hallucination detection. Its QA subset contains 10{,}000 paired examples—each consisting of one correct answer and one deliberately hallucinated alternative for the same question. The hallucinated answers were generated by prompting ChatGPT to produce plausible but incorrect responses, making them challenging to detect because they maintain fluency and surface-level coherence.
+
+We use HaluEval as our primary out-of-distribution (OOD) test. The probes are \emph{never} trained on this data. Instead, we simply score both the correct and hallucinated answers with our RAGTruth-trained probes and measure whether the probe can still distinguish them—even on data from a completely different generation process, prompt format, and topic distribution.
+
+\begin{dataformatbox}[HaluEval-QA Example Format]
+\small
+\textbf{Question:} ``What is the capital of Australia?''\\[3pt]
+\textbf{Correct answer:} ``The capital of Australia is Canberra, which was purpose-built as the capital in the early 20th century.''\\[3pt]
+\textbf{Hallucinated answer:} ``The capital of Australia is Sydney, the largest and most well-known city in the country, serving as both the economic and political center.''\\[3pt]
+\textbf{Evaluation:} Score both with our trained probe $\to$ compute AUROC over all 10{,}000 pairs.\\[2pt]
+\textbf{Expected:} $p_{\text{fused}}(\text{hallucinated}) > p_{\text{fused}}(\text{correct})$ if transfer is successful.
+\end{dataformatbox}
 
 \subsection{HalluRAG: Mistral-Specific Supplementary Data}
 \label{sec:hallurag}
 
-HalluRAG~\cite{frohling2024hallurag} offers sentence-level hallucination labels for Mistral-generated RAG outputs. We use it as optional supplementary training data for the Mistral backbone specifically.
+HalluRAG~\cite{frohling2024hallurag} takes a different approach from RAGTruth—it provides \emph{sentence-level} hallucination annotations rather than response-level ones. The dataset was created by running Mistral-based models on RAG tasks in closed-domain settings and annotating individual sentences for factual support.
+
+We use it as optional supplementary training data \emph{only} for the Mistral-7B-Instruct-v0.2 backbone. The rationale is that Mistral-generated activations paired with Mistral-specific hallucination patterns may give the Mistral probe additional training signal that is not available from the model-agnostic RAGTruth corpus. When enabled, these 1{,}098 sentence-level examples are converted to our binary label format and added to the Mistral training pool.
+
+\begin{dataformatbox}[HalluRAG Example Format]
+\small
+\textbf{Domain:} Closed-domain RAG (specific knowledge base)\\[3pt]
+\textbf{Generated sentence:} ``The company was founded in Munich in 1923 by Karl Fischer.''\\[3pt]
+\textbf{Retrieved evidence:} ``The company was established in 1925 in Berlin.''\\[3pt]
+\textbf{Sentence-level label:} \textcolor{abstainred}{\textbf{Hallucinated}} --- both the founding year (1923 vs.\ 1925) and location (Munich vs.\ Berlin) contradict the source.\\[3pt]
+\textbf{Usage:} Converted to binary label; added to Mistral-only training pool when supplementary data is enabled.
+\end{dataformatbox}
 
 %% -------------------------------------------------
 \section{Dataset Merging and Split Protocol}
