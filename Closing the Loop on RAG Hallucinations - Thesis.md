@@ -192,11 +192,9 @@ Declaration . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . i
         
    2. [Training Dynamics and HaluEval Transfer	26](#training-dynamics-and-halueval-transfer)  
         
-   3. [Post-Training Calibration	27](#post-training-calibration)  
+   3. [Post-Training Calibration and Fusion	27](#post-training-calibration)  
         
-   4. [Probability-Level Fusion	28](#probability-level-fusion)  
-        
-   5. [Summary	28](#summary)
+   4. [Summary	28](#summary)
 
    
 
@@ -212,9 +210,7 @@ Declaration . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . i
         
    5. [Example Closed-Loop Trace	31](#example-closed-loop-trace-1)  
         
-   6. [Interpretation of the Trace	31](#interpretation-of-the-trace)  
-        
-   7. [Summary	32](#summary-1)
+   6. [Summary	32](#summary-1)
 
    
 
@@ -442,7 +438,7 @@ Table 11.2	Backbone-level strengths and limitations	58
 
 This chapter establishes the motivation for the research. Section 1.1 introduces the hallucination problem in retrieval-augmented generation and explains why retrieval alone does not guarantee faithful generation. Section 1.2 explains the use of PyTorch forward hooks as the mechanism for accessing the model's internal states, including what a forward hook is (Section 1.2.1), why hooks are needed in this system (Section 1.2.2), and why hidden states cannot simply be read after inference (Section 1.2.3).
 
-2. ## **The Hallucination Problem in RAG** {#the-hallucination-problem-in-rag}
+1. ## **The Hallucination Problem in RAG** {#the-hallucination-problem-in-rag}
 
 Retrieval-Augmented Generation (RAG) \[1\] was conceived as a mechanism for factual grounding: instead of relying solely on parametric memory, the model conditions its output on a retrieved passage. In theory, the model should faithfully synthesize the retrieved evidence. In practice, LLMs continue to hallucinate at significant rates even with high-quality retrieval \[2\]. The model may selectively ignore the passage, blend it with conflicting parametric knowledge, or simply confabulate when the retrieved document is tangentially related.
 
@@ -460,7 +456,7 @@ The proposed pipeline adds an internal feedback stage. During generation, forwar
 
 This study therefore focuses on closing the gap between hallucination detection and hallucination mitigation: rather than only scoring a response after generation, the system uses the score to control the inference-time RAG loop.
 
-3. ## **Why Hooks?** {#why-hooks?}
+2. ## **Why Hooks?** {#why-hooks?}
 
 Before describing the full closed-loop system, it is necessary to explain how the model's internal states are accessed. This work uses **PyTorch forward hooks**, which allow selected intermediate tensors to be observed during a model's forward pass without changing the model's computation.
 
@@ -518,7 +514,7 @@ The objective of this study is to design and evaluate a closed-loop RAG system t
      
 5. "*Test the framework across multiple decoder-only transformer backbones without modifying their core architectures.*"
 
-6. ## **Technical Challenges** {#technical-challenges}
+3. ## **Technical Challenges** {#technical-challenges}
 
 The proposed framework addresses three technical challenges.
 
@@ -1007,7 +1003,7 @@ In **Panel B**, the CEV and IAV feature vectors are passed to two independent ML
 
 **Chapter 6 Probe Training, Calibration, and Cross-Domain Transfer**
 
-This chapter describes how the probes are trained, calibrated, and evaluated for cross-domain transfer. Section 6.1 presents the probe architecture and training protocol. Section 6.2 describes training dynamics and HaluEval transfer. Section 6.3 covers post-training calibration. Section 6.4 describes probability-level fusion, and Section 6.5 summarizes the findings.
+This chapter describes how the probes are trained, calibrated, and evaluated for cross-domain transfer. Section 6.1 presents the probe architecture and training protocol. Section 6.2 describes training dynamics and HaluEval transfer. Section 6.3 covers post-training calibration and probability-level fusion, and Section 6.4 summarizes the findings.
 
 1. ## **Probe Architecture and Training Protocol** {#probe-architecture-and-training-protocol}
 
@@ -1032,7 +1028,7 @@ The two output logits correspond to the **grounded** and **hallucinated** classe
 | **Validation split** | Stratified 80/20 split from processed RAGTruth training data |
 | **Checkpoint selection** | Best validation AUROC |
 
-Class weighting is used to reduce the effect of label imbalance, while label smoothing reduces overconfident probability estimates. This is important because the downstream controller depends on calibrated probabilities rather than raw class labels. AdamW is used for stable optimization in high-dimensional CEV/IAV feature spaces, and cosine scheduling provides smoother convergence over the fixed training budget.
+The rationale for these choices — class-weight derivation, label-smoothing motivation, and per-backbone learning-rate selection — is given in Section 8.4.
 
 2. ## **Training Dynamics and HaluEval Transfer** {#training-dynamics-and-halueval-transfer}
 
@@ -1086,13 +1082,11 @@ The training curves for the triple converge in the same way as the single-layer 
 **Decision.** Taking the detection, cost, training-dynamics, and transfer evidence together, the final system reads CEV and IAV from a single mid-depth layer at L/2 — layer 16 for the 32-layer Mistral-7B-Instruct-v0.2 and LLaMA-3-8B-Instruct, and layer 18 for the 36-layer Qwen3-8B. This gives the best AUROC per parameter, removes roughly two-thirds of the probe parameters relative to the triple, and simplifies the feature-extraction path with no measurable loss in detection quality or cross-domain transfer. Every result in the remainder of this thesis uses this single mid-depth configuration.
 
 
-3. ## **Post-Training Calibration** {#post-training-calibration}
+3. ## **Post-Training Calibration and Fusion** {#post-training-calibration}
 
 After training, each probe is calibrated independently using temperature scaling (the p(y=1) \= softmax(z/T) calibration defined in Section 5.5), where the temperature T is selected on the validation split by minimizing validation negative log-likelihood.
 
 Separate calibration is necessary because CEV and IAV probes can have different confidence profiles. A CEV probe may be well-ranked but overconfident, while an IAV probe may produce a different probability scale. Temperature scaling makes their outputs more comparable before fusion.
-
-4. ## **Probability-Level Fusion** {#probability-level-fusion}
 
 After calibration, the CEV and IAV probabilities are fused using the validation-tuned convex combination defined in Section 5.2.3 (p\_fused \= w·p\_CEV \+ (1 − w)·p\_IAV, with w selected on the validation split to maximize AUROC).
 
@@ -1111,7 +1105,7 @@ This fusion is performed at the probability level, not by concatenating raw CEV 
 | *Fusion objective* | Maximize validation AUROC |
 | *Controller input* | p\_fused |
 
-5. ## **Summary** {#summary}
+4. ## **Summary** {#summary}
 
 The training curves show that CEV and IAV probes learn stable in-domain hallucination signals on RAGTruth. The HaluEval ROC curves show that these signals can transfer out of domain, but transfer behavior is model-dependent. Qwen3-8B shows the strongest aligned transfer, LLaMA-3-8B-Instruct shows good aligned transfer, and Mistral-7B-Instruct-v0.2 shows strong but polarity-inverted discrimination.
 
@@ -1119,7 +1113,7 @@ The main conclusion from this chapter is that internal-state probes are useful b
 
 **Chapter 7 Closed-Loop Policy Controller**
 
-This chapter describes how the fused hallucination-risk probability is used to control the RAG inference loop. Section 7.1 states the purpose of the controller. Section 7.2 describes the controller inputs and thresholds. Section 7.3 presents the decision logic. Section 7.4 describes the semantic meaning of each action. Section 7.5 gives an example closed-loop trace. Section 7.6 interprets the trace, and Section 7.7 summarizes the chapter.
+This chapter describes how the fused hallucination-risk probability is used to control the RAG inference loop. Section 7.1 states the purpose of the controller. Section 7.2 describes the controller inputs and thresholds. Section 7.3 presents the decision logic. Section 7.4 describes the semantic meaning of each action. Section 7.5 gives an example closed-loop trace with interpretation, and Section 7.6 summarizes the chapter.
 
 1. ## **Purpose of the Controller** {#purpose-of-the-controller}
 
@@ -1186,9 +1180,7 @@ The system first generates a high-risk unsupported location claim and triggers r
 | *2* | Historical/refutational discussion of Atlantis | "Some texts place it in the Atlantic Ocean..." | 0.69 | Moderate | REGENERATE | Retry using refined evidence |
 | *3* | Refined context / prior evidence retained | "Atlantis is mythological; I cannot verify a single factual location." | 0.22 | Low | ACCEPT | Deliver safe final response |
 
-6. ## **Interpretation of the Trace** {#interpretation-of-the-trace}
-
-The example shows that the controller does not simply refuse whenever a query is difficult. Instead, it attempts recovery through re-retrieval and regeneration before final delivery.
+**Interpretation.** The example shows that the controller does not simply refuse whenever a query is difficult. Instead, it attempts recovery through re-retrieval and regeneration before final delivery.
 
 The first response is a confident but unsupported location claim, so the hallucination score is elevated but still below the abstention threshold, and the controller triggers **RE-RETRIEVE**. The second response is safer but still speculative, so the controller triggers **REGENERATE**. The third response is a safe refusal-style answer: it does not invent a location and explicitly states that Atlantis cannot be verified as a factual place. Because the hallucination probability falls to 0.22, the controller accepts the response.
 
@@ -1196,7 +1188,7 @@ This distinction is important: the final answer is a refusal-style response, but
 
 **Relationship to the live runs.** Because Figure 7.1 and Table 7.2 are illustrative, their three-round recovery should not be read as the logged outcome for this query. In the actual nine-query demonstration (Section 8.12), the live Atlantis query resolved in a single attempt on all three backbones: Qwen3-8B abstained (fused 0.80), while Mistral-7B-Instruct-v0.2 and LLaMA-3-8B-Instruct accepted the model's own in-text refusal (fused 0.31 and 0.10). The multi-round path drawn here was not triggered by that query; it is shown to trace how the controller handles a borderline case that begins above the intervention threshold but below the abstention threshold.
 
-7. ## **Summary** {#summary-1}
+6. ## **Summary** {#summary-1}
 
 The closed-loop controller transforms hallucination detection into an operational decision process. It uses the fused CEV/IAV hallucination probability, retrieval-quality score, and retry count to decide whether to accept, regenerate, re-retrieve, or abstain. This makes the RAG pipeline self-corrective at inference time while preserving interpretability through a deterministic threshold policy.
 
@@ -1531,17 +1523,13 @@ Relative reduction \= (Vanilla proxy − Closed-loop proxy) / Vanilla proxy × 1
 
 The figure compares delivered hallucination proxy, acceptance rate, and relative hallucination reduction across the three backbone models.
 
-**Interpretation.** The closed-loop controller reduces delivered hallucination risk for all three backbones, but the safety–utility profile differs sharply. Qwen3-8B shows the largest relative reduction, cutting the delivered proxy from 0.5388 to 0.1116 (a **79.3% reduction**), yet it is also the most conservative, accepting only **42%** of queries.
-
-Mistral-7B-Instruct-v0.2 delivers the **lowest** absolute hallucination proxy (0.1068, a **67.6% reduction**) while still accepting **62%** of queries, giving it the most balanced safety–utility position of the three backbones.
-
-LLaMA-3-8B-Instruct is the most permissive: it accepts **90%** of queries and still reduces the delivered proxy by **45.1%** (0.3321 → 0.1824). It preserves the highest answer utility, at the cost of the highest residual hallucination proxy among the three.
+**Interpretation.** The closed-loop controller reduces delivered hallucination risk for all three backbones; the per-backbone safety–utility profiles (Mistral balanced, Qwen conservative, LLaMA permissive) are discussed in Section 9.2.
 
 **Note on comparison asymmetry.** This comparison is intentionally asymmetric. Vanilla RAG has no abstention mechanism: it delivers every generated answer, regardless of hallucination risk. Closed-loop RAG, by design, is allowed to reject or withhold unsafe responses. Therefore, this experiment should not be interpreted as asking *which system generates better answers on every query?* Instead, it asks *how much hallucination-risk is actually delivered to the user after the system has the opportunity to intervene?* Abstention is not a weakness in this evaluation; it is one of the safety mechanisms being tested. However, abstention reduces utility, so the acceptance rate is reported alongside hallucination reduction. A system that abstains on every query would achieve near-zero delivered hallucination but would be useless. The best system should therefore minimize delivered hallucination while maintaining a high acceptance rate.
 
 **Statistical note.** Bootstrap 95% confidence intervals (1,000 resamples of the 100-query proxy scores) confirm the gap: the vanilla and closed-loop intervals are non-overlapping for every backbone — Mistral-7B-Instruct-v0.2 vanilla [0.2930, 0.3713] vs. closed-loop [0.0884, 0.1253], Qwen3-8B [0.5029, 0.5713] vs. [0.0841, 0.1394], and LLaMA-3-8B-Instruct [0.2832, 0.3874] vs. [0.1509, 0.2129]. The reduction is therefore statistically reliable under this proxy, though the proxy is an automated estimate rather than a human-judged hallucination rate.
 
-**Threats to validity (proxy metric).** These reductions are measured with the system's own calibrated probe score, averaged over accepted responses, rather than with human or external factuality judgments. The metric is therefore partly self-referential: a controller that accepts only low-scoring responses will, by construction, report a low delivered proxy. Three caveats follow. First, the proxy cannot catch the failure mode described in Section 4.4.3, where a confident but unsupported extraction produces hidden states almost identical to a grounded answer and is scored as low-risk. Second, the closed-loop numbers come from a single 100-query SQuAD sample at one seed, so the acceptance and reduction rates carry sampling noise beyond the bootstrap intervals reported above. Third, the controller almost always chose ACCEPT or ABSTAIN in these runs, so the RE-RETRIEVE branch is exercised far less than the accept/abstain gate and is correspondingly less validated. The reductions are best read as evidence that the controller lowers probe-estimated risk at a tunable utility cost, not as a measured drop in human-verified hallucination.
+**Threats to validity (proxy metric).** These reductions are measured with the system's own calibrated probe score rather than with human or external judgments — the metric is therefore partly self-referential. Three specific caveats apply: (i) the proxy cannot catch the failure mode of Section 4.4.3, where confident but unsupported extractions are scored as low-risk; (ii) the 100-query sample at one seed carries sampling noise beyond the bootstrap intervals above; and (iii) the RE-RETRIEVE branch was rarely exercised relative to the accept/abstain gate. These caveats are formalized as Limitations 6–8 in Section 9.5.
 
 **Closed-loop verdict.** Across all three backbones the controller substantially lowers delivered probe-estimated risk; the per-backbone safety–utility positions are consolidated in Table 8.13 and discussed in Section 9.2.
 
@@ -1874,7 +1862,7 @@ The final architecture works because each design choice addresses a specific emp
 | **Qwen3-8B** | Best fused AUROC and mean-fusion accuracy; largest relative hallucination reduction; aligned HaluEval transfer | Most conservative; lowest acceptance rate (42%) |
 | **LLaMA-3-8B-Instruct** | Best out-of-domain HaluEval transfer; highest acceptance rate (90%) | Smallest relative reduction; single-layer threshold needed a health-check fallback and Platt recalibration |
 
-**Backbone verdict:** There is no single winner. Mistral-7B-Instruct-v0.2 is the balanced choice, Qwen3-8B is best when safety and abstention are prioritized, and LLaMA-3-8B-Instruct is best when answer utility matters most.
+**Backbone verdict:** There is no single winner. Mistral-7B-Instruct-v0.2 is the balanced choice, Qwen3-8B is best when safety and abstention are prioritized, and LLaMA-3-8B-Instruct is best when answer utility matters most. The per-backbone operational profiles are discussed further in Section 9.4; quantitative comparisons are consolidated in Table 8.13.
 
 4. ## **Why Some Alternative Approaches Were Insufficient** {#why-some-alternative-approaches-were-insufficient}
 
