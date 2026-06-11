@@ -1168,17 +1168,17 @@ The key distinction is that **REGENERATE** treats the generator as the likely so
 
 5. ## **Example Closed-Loop Trace** {#example-closed-loop-trace-1}
 
-Figure 7.1 illustrates the controller behavior on an Atlantis-location query. This example is useful because the question contains a fictional/mythological premise that can easily trigger confident hallucination.
+Figure 7.1 is an illustrative walk-through of the controller's recovery path on an Atlantis-location query — a constructed example, not a single logged run. The query is a useful choice because its fictional, mythological premise easily invites a confident hallucination, which lets the trace show how the RE-RETRIEVE → REGENERATE → ACCEPT branch is meant to behave. The live behavior of this same query on each backbone is reported separately in Section 8.12.
 
 (The reason the three backbones use different thresholds is discussed once in Section 8.5.)
 
 ![A diagram of a process flowDescription automatically generated][image10]
 
-**Figure 7.1. Closed-loop Atlantis query trace.**
+**Figure 7.1. Closed-loop Atlantis query trace (illustrative).**
 
 The system first generates a high-risk unsupported location claim and triggers re-retrieval. The second attempt remains moderately risky, so the controller regenerates using refined evidence. The final response safely frames Atlantis as mythological and refuses to provide an unverifiable factual location. Because the final hallucination probability is low, the controller accepts this safe refusal as the verified output.
 
-**Table 7.2. Atlantis closed-loop trace**
+**Table 7.2. Atlantis closed-loop trace (illustrative example).**
 
 | *Iteration* | Retrieved evidence | Candidate response | p\_fused | Risk level | Controller decision | Outcome |
 | :---- | :---- | :---- | :---- | :---- | :---- | :---- |
@@ -1193,6 +1193,8 @@ The example shows that the controller does not simply refuse whenever a query is
 The first response is a confident but unsupported location claim, so the hallucination score is elevated but still below the abstention threshold, and the controller triggers **RE-RETRIEVE**. The second response is safer but still speculative, so the controller triggers **REGENERATE**. The third response is a safe refusal-style answer: it does not invent a location and explicitly states that Atlantis cannot be verified as a factual place. Because the hallucination probability falls to 0.22, the controller accepts the response.
 
 This distinction is important: the final answer is a refusal-style response, but the controller decision is **ACCEPT**, not **ABSTAIN**. The system is accepting a safe final output, not withholding the response.
+
+**Relationship to the live runs.** Because Figure 7.1 and Table 7.2 are illustrative, their three-round recovery should not be read as the logged outcome for this query. In the actual nine-query demonstration (Section 8.12), the live Atlantis query resolved in a single attempt on all three backbones: Qwen3-8B abstained (fused 0.80), while Mistral-7B-Instruct-v0.2 and LLaMA-3-8B-Instruct accepted the model's own in-text refusal (fused 0.31 and 0.10). The multi-round path drawn here was not triggered by that query; it is shown to trace how the controller handles a borderline case that begins above the intervention threshold but below the abstention threshold.
 
 7. ## **Summary** {#summary-1}
 
@@ -1539,7 +1541,9 @@ LLaMA-3-8B-Instruct is the most permissive: it accepts **90%** of queries and st
 
 **Statistical note.** Bootstrap 95% confidence intervals (1,000 resamples of the 100-query proxy scores) confirm the gap: the vanilla and closed-loop intervals are non-overlapping for every backbone — Mistral-7B-Instruct-v0.2 vanilla [0.2930, 0.3713] vs. closed-loop [0.0884, 0.1253], Qwen3-8B [0.5029, 0.5713] vs. [0.0841, 0.1394], and LLaMA-3-8B-Instruct [0.2832, 0.3874] vs. [0.1509, 0.2129]. The reduction is therefore statistically reliable under this proxy, though the proxy is an automated estimate rather than a human-judged hallucination rate.
 
-**Closed-loop verdict.** The closed-loop controller substantially reduces hallucination-risk delivery across all backbones, but the safety–utility trade-off differs by model. Mistral-7B-Instruct-v0.2 delivers the lowest residual hallucination proxy at a moderate 62% acceptance rate. Qwen3-8B achieves the largest relative reduction but is the most conservative (42% acceptance). LLaMA-3-8B-Instruct keeps the highest utility (90% acceptance) while still cutting delivered hallucination by nearly half.
+**Threats to validity (proxy metric).** These reductions are measured with the system's own calibrated probe score, averaged over accepted responses, rather than with human or external factuality judgments. The metric is therefore partly self-referential: a controller that accepts only low-scoring responses will, by construction, report a low delivered proxy. Three caveats follow. First, the proxy cannot catch the failure mode described in Section 4.4.3, where a confident but unsupported extraction produces hidden states almost identical to a grounded answer and is scored as low-risk. Second, the closed-loop numbers come from a single 100-query SQuAD sample at one seed, so the acceptance and reduction rates carry sampling noise beyond the bootstrap intervals reported above. Third, the controller almost always chose ACCEPT or ABSTAIN in these runs, so the RE-RETRIEVE branch is exercised far less than the accept/abstain gate and is correspondingly less validated. The reductions are best read as evidence that the controller lowers probe-estimated risk at a tunable utility cost, not as a measured drop in human-verified hallucination.
+
+**Closed-loop verdict.** Across all three backbones the controller substantially lowers delivered probe-estimated risk; the per-backbone safety–utility positions are consolidated in Table 8.13 and discussed in Section 9.2.
 
 10. ## **Ablation Study: CEV, IAV, and Fusion** {#ablation-study:-cev,-iav,-and-fusion}
 
@@ -1708,7 +1712,7 @@ The three evaluated backbones reveal distinct operational profiles.
 
 **LLaMA-3-8B-Instruct** offers the best out-of-domain HaluEval transfer and the highest answer utility (90% acceptance). It still reduces delivered hallucination risk, but by the smallest margin of the three. Its single-layer probe also required a health-check fallback during threshold selection (Section 8.5), making careful calibration especially important for this backbone.
 
-**Key implication.** The proposed framework is reusable across backbones, but the best deployment choice depends on the target safety–utility profile: Mistral-7B-Instruct-v0.2 for balanced operation, Qwen3-8B for safety-first settings, and LLaMA-3-8B-Instruct for utility-first settings.
+**Key implication.** The framework is reusable across backbones, and the deployment mapping is the same balanced / safety-first / utility-first split given in Section 9.2. The backbone-specific addition here is practical: Mistral-7B-Instruct-v0.2 must be recalibrated before use on a new domain because of its HaluEval polarity inversion, and LLaMA-3-8B-Instruct needs careful threshold calibration after the health-check fallback noted in Section 8.5.
 
 5. ## **Limitations** {#limitations}
 
