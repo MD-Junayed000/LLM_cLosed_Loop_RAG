@@ -763,7 +763,7 @@ The retrieved context and user query are passed to a frozen decoder-only LLM bac
 * LLaMA-3-8B-Instruct  
 * Qwen3-8B
 
-Forward hooks are registered at a single mid-depth decoder layer at approximately L/2. At that layer, the system captures z\_CEV^(l) from the residual-stream output, and z\_IAV^(l) from the SwiGLU FFN intermediate activation before down\_proj. Section 5.4.1 reports the ablation that motivates this single-layer choice.
+Forward hooks are registered at a single mid-depth decoder layer at approximately L/2. At that layer, the system captures z\_CEV^(ℓ\*) from the residual-stream output, and z\_IAV^(ℓ\*) from the SwiGLU FFN intermediate activation before down\_proj. Section 5.4.1 reports the ablation that motivates this single-layer choice.
 
 ### **5.2.3 Hallucination Detection Network**
 
@@ -784,20 +784,11 @@ The two probabilities are fused using a validation-tuned convex combination:
 
 p\_fused \= w·p\_CEV \+ (1 − w)·p\_IAV
 
-where w is selected on the validation split. In the experiments, the best fusion weights generally place more weight on IAV than CEV, suggesting that FFN intermediate activations provide strong hallucination-relevant signal.
+where w is selected on the validation split. In these single-layer runs the tuned weights are balanced rather than IAV-dominated — 0.50 / 0.50 for Mistral-7B-Instruct-v0.2, 0.60 / 0.40 (CEV-leaning) for Qwen3-8B, and 0.45 / 0.55 (slightly IAV-leaning) for LLaMA-3-8B-Instruct — confirming that both signals contribute and neither dominates universally.
 
 ### **5.2.4 Closed-Loop Policy Controller**
 
-The controller uses two signals: p\_fused and q\_ret to decide the next action. The action space is: A \= {ACCEPT, REGENERATE, RE-RETRIEVE, ABSTAIN}
-
-The decision logic is:
-
-* **ACCEPT** if hallucination risk is below the intervention threshold.  
-* **REGENERATE** if hallucination risk is moderate and retrieval quality is acceptable.  
-* **RE-RETRIEVE** if hallucination risk is high and retrieval quality is weak.  
-* **ABSTAIN** if hallucination risk remains high after retries or exceeds the abstention threshold.
-
-A maximum retry limit is used to prevent infinite loops: MAX\_RETRIES \= 3
+The controller consumes the fused hallucination probability p\_fused, the retrieval-quality score q\_ret, and the retry count, and selects one of four actions, A \= {ACCEPT, REGENERATE, RE-RETRIEVE, ABSTAIN}. To avoid repetition, the full decision rule, the backbone-specific thresholds, and the retry budget are stated once in Section 5.7 and analysed in Chapter 7; in brief, low-risk responses are accepted, moderate-risk responses are regenerated (when retrieval is adequate) or re-retrieved (when retrieval is weak), and high-risk responses — or exhausted retries — lead to abstention.
 
 **Table 5.1. Main system components**
 
@@ -841,7 +832,7 @@ z\_CEV^(ℓ\*) \= h\_out^(ℓ\*)
 
 The IAV is extracted from the SwiGLU FFN intermediate activation before the final down\_proj projection:
 
-z\_IAV^(ℓ) \= SiLU( W\_gate^(ℓ) RMSNorm(h\_ℓ) ) ⊙ ( W\_up^(ℓ) RMSNorm(h\_ℓ) )
+z\_IAV^(ℓ\*) \= SiLU( W\_gate^(ℓ\*) RMSNorm(h\_(ℓ\*)) ) ⊙ ( W\_up^(ℓ\*) RMSNorm(h\_(ℓ\*)) )
 
 where ⊙ denotes the element-wise (Hadamard) product. For autoregressive decoding, the final token representation is used because it has attended to the full preceding context. The last-token features from the single selected mid-depth layer ℓ\* form the two feature vectors, ϕ(x) for CEV and ψ(x) for IAV:
 
@@ -1175,25 +1166,17 @@ This rule separates two likely failure sources. If retrieval quality is weak, th
 
 The key distinction is that **REGENERATE** treats the generator as the likely source of the problem, while **RE-RETRIEVE** treats the retrieved evidence as the likely source of the problem.
 
-## **7.5 Why Thresholds Differ Across Backbones**
-
-The hallucination threshold is not fixed across models because each backbone has a different activation geometry and calibrated score distribution. A threshold that is too low may cause excessive false refusals, while a threshold that is too high may allow hallucinated responses through.
-
-For Mistral-7B-Instruct-v0.2, valid responses may receive relatively higher probe scores, so a higher intervention threshold reduces unnecessary intervention. For LLaMA-3-8B-Instruct, cautious or uncertainty-like generation patterns can also produce elevated risk scores, requiring a threshold above the default 0.50 boundary. Qwen3-8B shows clearer separation between grounded and hallucinated score distributions, allowing a lower intervention threshold.
-
-Thus, thresholds are not manually guessed. They are selected through validation-set tuning.
-
-## **7.6 Illustrative Closed-Loop Trace**
+5. ## **Example Closed-Loop Trace** {#example-closed-loop-trace-1}
 
 Figure 7.1 illustrates the controller behavior on an Atlantis-location query. This example is useful because the question contains a fictional/mythological premise that can easily trigger confident hallucination.
+
+(The reason the three backbones use different thresholds is discussed once in Section 8.5.)
 
 ![A diagram of a process flowDescription automatically generated][image10]
 
 **Figure 7.1. Closed-loop Atlantis query trace.**
 
 The system first generates a high-risk unsupported location claim and triggers re-retrieval. The second attempt remains moderately risky, so the controller regenerates using refined evidence. The final response safely frames Atlantis as mythological and refuses to provide an unverifiable factual location. Because the final hallucination probability is low, the controller accepts this safe refusal as the verified output.
-
-5. ## **Example Closed-Loop Trace** {#example-closed-loop-trace-1}
 
 **Table 7.2. Atlantis closed-loop trace**
 
