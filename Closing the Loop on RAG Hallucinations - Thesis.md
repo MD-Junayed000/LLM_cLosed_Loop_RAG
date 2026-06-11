@@ -1630,7 +1630,7 @@ The success criterion is based on the **final delivered behavior**, not only the
 | 7. Shakespeare greatest writer (subjective) | ACCEPT (0.08): “not stated in the context” | ACCEPT (0.22): “not mentioned in the context” | ACCEPT (0.10): confuses Shakespeare with Virgil from the passage |
 | 8. Five planets in order (answerable) | ACCEPT (0.52): lists five correctly | REGEN×2 → ACCEPT (0.51): lists five | ACCEPT (0.11): lists five |
 | 9. Atlantis 2024 census (nonsensical) | ACCEPT (0.31): “no official census; fictional” | ABSTAIN (0.80) | ACCEPT (0.10): “no information — cannot answer” |
-| **Controller action total** | **9/ 0** | **6 accept /  3** | **9 accept / 0** |
+| **Controller action total** | **9 / 0** | **6 / 3** | **9 / 0** |
 
 Scores in parentheses are the fused hallucination probabilities; each backbone uses its own deployment thresholds (Table 8.5). “REGEN×2 → ACCEPT” means the controller regenerated twice before accepting the response. The action totals count every controller decision, including intermediate regenerations: Qwen3-8B is the only backbone that uses the REGENERATE action — four regenerations in total, twice each on #5 and #8 — whereas Mistral-7B-Instruct-v0.2 and LLaMA-3-8B-Instruct accept every query on the first attempt (nine single-attempt accepts each).
 
