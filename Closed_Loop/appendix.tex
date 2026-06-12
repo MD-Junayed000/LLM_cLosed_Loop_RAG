@@ -15,7 +15,14 @@ All backbone-specific experiments were executed on Google Colab using an NVIDIA 
 
 The final experimental pipeline:
 \[
-    \text{Frozen LLM} \to \text{CEV/IAV extraction} \to \text{Probe training} \to \text{Calibration} \to \text{Fusion} \to \text{Controller}
+\begin{aligned}
+\text{Frozen LLM} 
+&\to \text{CEV/IAV extraction} 
+\to \text{Probe training} 
+\to \text{Calibration} \\
+&\to \text{Fusion} 
+\to \text{Controller}
+\end{aligned}
 \]
 
 \subsection*{A.2 Frozen-Backbone Setting}
@@ -144,7 +151,7 @@ Added runtime cost & No clear improvement \\
 
 \begin{pseudocodebox}[Deterministic Controller --- Final System]
 \begin{tabbing}
-\hspace{0.5cm}\=\hspace{0.5cm}\=\kill
+\hspace{0.8cm}\=\hspace{3.6cm}\=\kill
 \textbf{Input:}\\
 \> $p_{\text{fused}}$ \> calibrated hallucination-risk probability\\
 \> $q_{\text{ret}}$ \> retrieval-quality score\\

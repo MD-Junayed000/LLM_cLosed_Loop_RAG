@@ -1,13 +1,13 @@
 \chapter{Experimental Setup and Results}
 \label{ch:results}
 
-This is where the rubber meets the road. We evaluate the full CEV/IAV closed-loop framework on three frozen decoder backbones—\textbf{Mistral-7B-Instruct-v0.2}, \textbf{LLaMA-3-8B-Instruct}, and \textbf{Qwen3-8B}—and ask four questions. Can the probes actually detect hallucination reliably? Does fusing two signals beat using one alone? Does the closed-loop controller genuinely reduce hallucination risk compared to vanilla RAG? And do the learned signals generalize to data the probes have never seen?
+This is where the rubber meets the road. We evaluate the full CEV/IAV closed-loop framework on three frozen decoder backbones: \textbf{Mistral-7B-Instruct-v0.2}, \textbf{LLaMA-3-8B-Instruct}, and \textbf{Qwen3-8B} and ask four questions. Can the probes actually detect hallucination reliably? Does fusing two signals beat using one alone? Does the closed-loop controller genuinely reduce hallucination risk compared to vanilla RAG? And do the learned signals generalize to data the probes have never seen?
 
 %% -------------------------------------------------
 \section{Experimental Setup}
 \label{sec:experimental_setup}
 
-Every experiment runs on Google Colab with an NVIDIA A100 GPU (40\,GB) under FP16 inference. The backbone weights are frozen throughout—we never fine-tune the language model itself. Only the lightweight probes are trained, and each backbone gets its own independently calibrated probes, thresholds, and fusion weights, all tuned on a stratified RAGTruth validation split.
+Every experiment runs on Google Colab with an NVIDIA A100 GPU (40\,GB) under FP16 inference. The backbone weights are frozen throughout, we never fine-tune the language model itself. Only the lightweight probes are trained, and each backbone gets its own independently calibrated probes, thresholds, and fusion weights, all tuned on a stratified RAGTruth validation split.
 
 %% -------------------------------------------------
 \section{Dataset Overview}
@@ -19,18 +19,57 @@ We rely on four datasets, each serving a distinct role in the pipeline. Table~\r
 \centering
 \caption{Dataset roles in the experimental pipeline.}
 \label{tab:dataset_roles}
-\small
-\begin{tabular}{@{}l r l c c c p{3.5cm}@{}}
+\scriptsize
+\renewcommand{\arraystretch}{1.25}
+\setlength{\tabcolsep}{3pt}
+
+\begin{tabularx}{\textwidth}{@{}L{2.55cm} r L{2.05cm} c c c Y@{}}
 \toprule
-\textbf{Dataset} & \textbf{Samples} & \textbf{Role} & \textbf{Train?} & \textbf{Retrieval?} & \textbf{Eval?} & \textbf{Purpose} \\
+\textbf{Dataset} & \textbf{Samples} & \textbf{Role} & \textbf{Train} & \textbf{Ret.} & \textbf{Eval.} & \textbf{Purpose} \\
 \midrule
-RAGTruth-18K & 15{,}090 + 3{,}058 & Probe supervision & Yes & No & Val split & Train/validate probes \\
-SQuAD v1.1 (FAISS) & 25{,}000 & Retrieval KB & No & Yes & No & Build FAISS index \\
-SQuAD v1.1 (F1) & 10{,}570 & Utility check & No & No & Optional & Token-level F1 \\
-HaluEval-QA & 10{,}000 & OOD benchmark & No & No & Yes & Cross-domain transfer \\
-HalluRAG & 1{,}098 & Supplementary & Mistral & No & No & Sentence-level examples \\
+
+RAGTruth-18K 
+& 15{,}090 + 3{,}058 
+& Probe supervision 
+& Yes 
+& No 
+& Val 
+& Train and validate probes \\
+
+SQuAD v1.1 (FAISS) 
+& 25{,}000 
+& Retrieval KB 
+& No 
+& Yes 
+& No 
+& Build FAISS index \\
+
+SQuAD v1.1 (F1) 
+& 10{,}570 
+& Utility check 
+& No 
+& No 
+& Optional 
+& Token-level F1 check \\
+
+HaluEval-QA 
+& 10{,}000 
+& OOD benchmark 
+& No 
+& No 
+& Yes 
+& Cross-domain transfer test \\
+
+HalluRAG 
+& 1{,}098 
+& Supplementary 
+& Mistral 
+& No 
+& No 
+& Sentence-level examples \\
+
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table}
 
 \subsection{RAGTruth-18K: Primary Probe Supervision}
@@ -65,7 +104,7 @@ We convert the multi-class annotation scheme into a binary label: $y = 0$ for gr
 
 SQuAD v1.1~\cite{rajpurkar2016squad} is one of the most widely used reading comprehension benchmarks, containing over 100{,}000 question-answer pairs drawn from Wikipedia articles. In our pipeline, it serves a dual purpose that leverages different parts of the dataset for different functions.
 
-\textbf{As a retrieval corpus:} We take 25{,}000 context passages from the SQuAD training set, encode them with the BGE embedding model, and index them in FAISS. This becomes the knowledge base from which our system retrieves evidence at inference time. The passages cover diverse topics—history, science, literature, geography—giving the retriever a reasonable breadth of knowledge.
+\textbf{As a retrieval corpus:} We take 25{,}000 context passages from the SQuAD training set, encode them with the BGE embedding model, and index them in FAISS. This becomes the knowledge base from which our system retrieves evidence at inference time. The passages cover diverse topics: history, science, literature, geography—giving the retriever a reasonable breadth of knowledge.
 
 \textbf{As an operational QA source:} The 10{,}570 validation question-answer pairs provide the queries on which we test the full closed-loop pipeline. Each query has a known reference answer, which allows us to compute token-level F1 as an optional utility check (though AUROC on the probe is our primary metric).
 
@@ -80,7 +119,7 @@ SQuAD v1.1~\cite{rajpurkar2016squad} is one of the most widely used reading comp
 \subsection{HaluEval-QA: Out-of-Distribution Evaluation}
 \label{sec:halueval_dataset}
 
-HaluEval~\cite{li2023halueval} was specifically designed to benchmark hallucination detection. Its QA subset contains 10{,}000 paired examples—each consisting of one correct answer and one deliberately hallucinated alternative for the same question. The hallucinated answers were generated by prompting ChatGPT to produce plausible but incorrect responses, making them challenging to detect because they maintain fluency and surface-level coherence.
+HaluEval~\cite{li2023halueval} was specifically designed to benchmark hallucination detection.Its QA subset contains 10,000 paired examples with one correct answer and one deliberately hallucinated alternative to the same question. The hallucinated answers were generated by prompting ChatGPT to produce plausible but incorrect responses, making them challenging to detect because they maintain fluency and surface-level coherence.
 
 We use HaluEval as our primary out-of-distribution (OOD) test. The probes are \emph{never} trained on this data. Instead, we simply score both the correct and hallucinated answers with our RAGTruth-trained probes and measure whether the probe can still distinguish them—even on data from a completely different generation process, prompt format, and topic distribution.
 
@@ -155,7 +194,7 @@ Each probe is a binary classifier ($y \in \{0, 1\}$) trained with class-weighted
 \end{align}
 
 \noindent So the hallucinated class gets a slightly higher weight since it is less frequent—nothing dramatic, but enough to prevent the probe from being lazy and always predicting ``grounded.''
-
+\newpage
 \subsection{Learning-Rate Explanation}
 \label{sec:lr_explanation}
 
@@ -165,15 +204,29 @@ Not all backbones are created equal when it comes to probe training. Mistral's a
 \centering
 \caption{Learning-rate settings and rationale.}
 \label{tab:lr_settings}
-\begin{tabular}{@{}lll@{}}
+\footnotesize
+\renewcommand{\arraystretch}{1.25}
+\setlength{\tabcolsep}{4pt}
+
+\begin{tabularx}{\textwidth}{@{}p{3.6cm} p{2.2cm} X@{}}
 \toprule
-\textbf{Backbone} & \textbf{Learning Rate} & \textbf{Why} \\
+\textbf{Backbone} & \textbf{Learning Rate} & \textbf{Rationale} \\
 \midrule
-Mistral-7B-Instruct-v0.2 & $3 \times 10^{-4}$ & More conservative; activations are format-sensitive \\
-LLaMA-3-8B-Instruct      & $1 \times 10^{-3}$ & Converges quickly; stable activation distributions \\
-Qwen3-8B                  & $1 \times 10^{-3}$ & Strong validation signal; fast convergence \\
+
+Mistral-7B-Instruct-v0.2 
+& $3 \times 10^{-4}$ 
+& Conservative setting because its activations are format-sensitive. \\
+
+LLaMA-3-8B-Instruct 
+& $1 \times 10^{-3}$ 
+& Faster convergence with stable activation distributions. \\
+
+Qwen3-8B 
+& $1 \times 10^{-3}$ 
+& Strong validation signal and fast convergence. \\
+
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table}
 
 %% -------------------------------------------------
@@ -207,20 +260,35 @@ Table~\ref{tab:ragtruth_results} presents the headline numbers. All three backbo
 \centering
 \caption{RAGTruth validation results (primary in-domain evaluation).}
 \label{tab:ragtruth_results}
-\begin{tabular}{@{}lcccc@{}}
+\footnotesize
+\renewcommand{\arraystretch}{1.25}
+\setlength{\tabcolsep}{5pt}
+
+\begin{tabularx}{\textwidth}{@{}p{5.9cm} C C C C@{}}
 \toprule
-\textbf{Backbone} & \textbf{CEV AUROC} & \textbf{IAV AUROC} & \textbf{Fused AUROC} & \textbf{Mean Acc.} \\
+\textbf{Backbone} 
+& \makecell{\textbf{CEV}\\\textbf{AUROC}} 
+& \makecell{\textbf{IAV}\\\textbf{AUROC}} 
+& \makecell{\textbf{Fused}\\\textbf{AUROC}} 
+& \makecell{\textbf{Mean}\\\textbf{Acc.}} \\
 \midrule
-Mistral-7B-Instruct-v0.2 & 0.8474 & 0.8474 & 0.8596 & 0.7806 \\
-Qwen3-8B                  & \textbf{0.8763} & \textbf{0.8709} & \textbf{0.8808} & \textbf{0.7995} \\
-LLaMA-3-8B-Instruct      & 0.8579 & 0.8622 & 0.8689 & 0.7822 \\
+
+Mistral-7B-Instruct-v0.2 
+& 0.8474 & 0.8474 & 0.8596 & 0.7806 \\
+
+Qwen3-8B 
+& \textbf{0.8763} & \textbf{0.8709} & \textbf{0.8808} & \textbf{0.7995} \\
+
+LLaMA-3-8B-Instruct 
+& 0.8579 & 0.8622 & 0.8689 & 0.7822 \\
+
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table}
 
 \begin{figure}[!htb]
     \centering
-    \includegraphics[width=0.90\textwidth]{Images/our_models_multi_metric.png}
+    \includegraphics[width=1.00\textwidth]{Images/our_models_multi_metric.png}
     \caption[Cross-model probe performance.]{Cross-model probe performance across multiple metrics. Qwen3-8B leads on in-domain validation; LLaMA-3-8B-Instruct leads on out-of-domain HaluEval transfer.}
     \label{fig:multi_metric}
 \end{figure}
@@ -233,7 +301,7 @@ Figure~\ref{fig:score_histograms} shows what the probe scores look like in pract
 
 \begin{figure}[!htb]
     \centering
-    \includegraphics[width=0.90\textwidth]{Images/probe_score_histograms_grid.png}
+    \includegraphics[width=1.05\textwidth]{Images/probe_score_histograms_grid.png}
     \caption[Probe score distributions.]{Probe score distributions for grounded vs.\ hallucinated examples. Partial overlap is expected—hallucination is a graded phenomenon, not a binary one.}
     \label{fig:score_histograms}
 \end{figure}
@@ -271,8 +339,8 @@ SAPLMA~\cite{azaria2023saplma}                  & Hidden-state probe       & No 
 
 \begin{figure}[!htb]
     \centering
-    \includegraphics[width=0.90\textwidth]{Images/compare_prior_work_ragtruth_paper_style.png}
-    \caption[Baselines vs.\ proposed probe.]{Published baselines vs.\ our fused CEV/IAV probe on RAGTruth. Our method tops the chart on both backbones—and is the only one that feeds its score into a closed-loop controller.}
+    \includegraphics[width=1.00\textwidth]{Images/compare_prior_work_ragtruth_paper_style.png}
+    \caption[Baselines vs.\ proposed probe.]{Published baselines vs.\ our fused CEV/IAV probe on RAGTruth. Our method tops the chart on both backbones and is the only one that feeds its score into a closed-loop controller.}
     \label{fig:baselines}
 \end{figure}
 
@@ -299,12 +367,12 @@ LLaMA-3-8B  & 0.3321 & 0.1824          & 45.1\% & \textbf{90\%} & 10\% \\
 
 \begin{figure}[!htb]
     \centering
-    \includegraphics[width=0.90\textwidth]{Images/vanilla_vs_closedloop_comparison.png}
+    \includegraphics[width=1.00\textwidth]{Images/vanilla_vs_closedloop_comparison.png}
     \caption[Vanilla vs.\ closed-loop RAG.]{The closed-loop system cuts delivered hallucination risk substantially on all three backbones, with different safety--utility trade-offs per model.}
     \label{fig:vanilla_vs_cl}
 \end{figure}
 
-The numbers speak clearly. Every backbone sees a meaningful reduction in delivered hallucination risk—ranging from 45\% (LLaMA) to nearly 80\% (Qwen). But this comes at different costs. Qwen achieves the biggest reduction by being the most aggressive abstainer (58\% of queries refused). Mistral strikes a balance (62\% accepted, 68\% reduction). LLaMA keeps almost everything (90\% accepted) but pays for it with a smaller reduction.
+The numbers speak clearly. Every backbone sees a meaningful reduction in delivered hallucination risk ranging from 45\% (LLaMA) to nearly 80\% (Qwen). But this comes at different costs. Qwen achieves the biggest reduction by being the most aggressive abstainer (58\% of queries refused). Mistral strikes a balance (62\% accepted, 68\% reduction). LLaMA keeps almost everything (90\% accepted) but pays for it with a smaller reduction.
 
 \textbf{An important caveat.} These reductions are measured using the system's own probe score as the hallucination proxy—not human judgments. The metric is therefore partly self-referential: a controller that only accepts low-scoring responses will, by construction, report low delivered risk. Three specific limitations follow: (i) the probe cannot catch the failure mode from Section~\ref{sec:illustrative_examples}; (ii) 100 queries at one seed carries sampling noise; (iii) the RE-RETRIEVE branch was rarely triggered. We expand on these in Section~\ref{sec:limitations}.
 
@@ -331,7 +399,7 @@ LLaMA-3-8B  & \textbf{0.789} & 0.782 & 0.782 & CEV \\
 
 \begin{figure}[!htb]
     \centering
-    \includegraphics[width=0.85\textwidth]{Images/section12_3_core_ablation_accuracy_comparison.png}
+    \includegraphics[width=1.00\textwidth]{Images/section12_3_core_ablation_accuracy_comparison.png}
     \caption[Ablation results.]{CEV-only vs.\ IAV-only vs.\ mean-fusion accuracy. Fusion wins on two out of three backbones; on LLaMA, CEV alone matches fusion.}
     \label{fig:ablation}
 \end{figure}
@@ -362,7 +430,7 @@ LLaMA-3-8B & 0.740 & 0.816 & \textbf{0.814} & Best aligned \\
 
 \begin{figure}[!htb]
     \centering
-    \includegraphics[width=0.90\textwidth]{Images/halueval_three_column.png}
+    \includegraphics[width=1.00\textwidth]{Images/halueval_three_column.png}
     \caption[HaluEval OOD results.]{HaluEval transfer results. LLaMA and Qwen generalize well; Mistral's signal is equally strong but polarity-inverted.}
     \label{fig:halueval}
 \end{figure}
@@ -373,7 +441,7 @@ LLaMA transfers beautifully (0.814 raw AUROC). Qwen does respectably (0.699). Mi
 \section{Nine-Query Live Demonstration}
 \label{sec:nine_query_demo}
 
-To complement the aggregate statistics, we ran all three backbones on a curated set of nine queries—ranging from easy factual questions to deliberately impossible ones. Unlike the RAGTruth validation and the 100-query closed-loop evaluation, this experiment is not meant to provide statistical evidence. It is a qualitative stress test: does the system behave sensibly across different query types?
+To complement the aggregate statistics, we ran all three backbones on a curated set of nine queries ranging from easy factual questions to deliberately impossible ones. Unlike the RAGTruth validation and the 100-query closed-loop evaluation, this experiment is not meant to provide statistical evidence. It is a qualitative stress test: does the system behave sensibly across different query types?
 
 The success criterion here is based on the \emph{final delivered behavior}, not only the first generated response. A query counts as successful when the system either returns a correct grounded answer (for answerable questions) or refuses safely (for unanswerable, subjective, fictional, or nonsensical ones). Importantly, an ``accept'' decision is not automatically unsafe—for Mistral and LLaMA, several accepted responses are themselves honest in-text refusals like ``the context does not contain this.''
 
@@ -401,26 +469,83 @@ The success criterion here is based on the \emph{final delivered behavior}, not 
 
 Table~\ref{tab:nine_query} shows exactly what each backbone did on each query.
 
+
+
+
+
+
 \begin{table}[!htb]
 \centering
 \caption{Nine-query outcomes per backbone (fused hallucination score in parentheses).}
 \label{tab:nine_query}
-\footnotesize
-\begin{tabularx}{\textwidth}{@{}c p{3.5cm} X X X@{}}
+\scriptsize
+\renewcommand{\arraystretch}{1.35}
+\setlength{\tabcolsep}{2pt}
+
+\begin{tabularx}{\textwidth}{@{}c L{2.0cm} Y Y Y@{}}
 \toprule
 \textbf{\#} & \textbf{Query Type} & \textbf{Mistral-7B} & \textbf{Qwen3-8B} & \textbf{LLaMA-3-8B} \\
 \midrule
-1 & Author (answerable) & ACCEPT (0.59): ``Jane Austen'' & ABSTAIN (0.72) & ACCEPT (0.07): context lacks it \\
-2 & Westphalia (answerable) & ACCEPT (0.60): ``1648'' & ACCEPT (0.42): ``1648'' & ACCEPT (0.08): context lacks it \\
-3 & Kelvin (answerable) & ACCEPT (0.42): ``273\,K'' & ACCEPT (0.33): ``273\,K'' & ACCEPT (0.19): ``273\,K'' \\
-4 & Breakfast (impossible) & ACCEPT (0.12): ``cannot answer'' & ABSTAIN (0.86) & ACCEPT (0.19): ``no information'' \\
-5 & Mars capital (impossible) & ACCEPT (0.17): ``no capital'' & REGEN$\times$2$\to$ACCEPT (0.20) & ACCEPT (0.17): ``none is capital'' \\
-6 & Climate (RAG-supported) & ACCEPT (0.34): grounded & ACCEPT (0.38): grounded & ACCEPT (0.47): grounded \\
-7 & Shakespeare (subjective) & ACCEPT (0.08): ``not stated'' & ACCEPT (0.22): ``not mentioned'' & ACCEPT (0.10): confuses with Virgil \\
-8 & Five planets (answerable) & ACCEPT (0.52): lists five & REGEN$\times$2$\to$ACCEPT (0.51) & ACCEPT (0.11): lists five \\
-9 & Atlantis census (nonsensical) & ACCEPT (0.31): ``fictional'' & ABSTAIN (0.80) & ACCEPT (0.10): ``cannot answer'' \\
+
+1 & Author 
+& ACCEPT (0.59): ``Jane Austen'' 
+& ABSTAIN (0.72) 
+& ACCEPT (0.07): context lacks it \\
+\addlinespace[2.3pt]
+
+2 & Westphalia 
+& ACCEPT (0.60): ``1648'' 
+& ACCEPT (0.42): ``1648'' 
+& ACCEPT (0.08): context lacks it \\
+\addlinespace[2pt]
+
+3 & Kelvin 
+& ACCEPT (0.42): ``273\,K'' 
+& ACCEPT (0.33): ``273\,K'' 
+& ACCEPT (0.19): ``273\,K'' \\
+\addlinespace[2pt]
+
+4 & Breakfast 
+& ACCEPT (0.12): ``cannot answer'' 
+& ABSTAIN (0.86) 
+& ACCEPT (0.19): ``no information'' \\
+\addlinespace[2pt]
+
+5 & Mars capital 
+& ACCEPT (0.17): ``no capital'' 
+& REGEN$\times$2 $\to$ ACCEPT (0.20) 
+& ACCEPT (0.17): ``none is capital'' \\
+\addlinespace[2pt]
+
+6 & Climate 
+& ACCEPT (0.34): grounded 
+& ACCEPT (0.38): grounded 
+& ACCEPT (0.47): grounded \\
+\addlinespace[2pt]
+
+7 & Shakespeare 
+& ACCEPT (0.08): ``not stated'' 
+& ACCEPT (0.22): ``not mentioned'' 
+& ACCEPT (0.10): confuses with Virgil \\
+\addlinespace[2pt]
+
+8 & Five planets 
+& ACCEPT (0.52): lists five 
+& REGEN$\times$2 $\to$ ACCEPT (0.51) 
+& ACCEPT (0.11): lists five \\
+\addlinespace[2pt]
+
+9 & Atlantis census 
+& ACCEPT (0.31): ``fictional'' 
+& ABSTAIN (0.80) 
+& ACCEPT (0.10): ``cannot answer'' \\
+
 \midrule
-\multicolumn{2}{@{}l}{\textbf{Action totals (accept/abstain)}} & \textbf{9 / 0} & \textbf{6 / 3} & \textbf{9 / 0} \\
+\multicolumn{2}{@{}l}{\textbf{Action totals}} 
+& \textbf{9 / 0} 
+& \textbf{6 / 3} 
+& \textbf{9 / 0} \\
+
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -436,7 +561,7 @@ Table~\ref{tab:nine_query} shows exactly what each backbone did on each query.
     \item \textbf{Query \#9 (nonsensical):} Mistral and LLaMA accept safe refusals identifying Atlantis as fictional; Qwen abstains. No model invents a population figure.
 \end{itemize}
 
-The same safe outcome is reached through two complementary mechanisms. \textbf{Qwen3-8B} intervenes at the controller level—the probe assigns high fused scores (0.72--0.86) to unanswerable queries, triggering ABSTAIN. \textbf{Mistral and LLaMA} refuse at the generation level—the model itself produces an honest in-text refusal that the probe correctly scores as low-risk (0.10--0.31), and the controller accepts it. A ``9 / 0'' profile therefore reflects a well-calibrated controller with a low false-refusal rate—one that does not over-abstain on responses that are already safe—rather than an inactive one.
+The same safe outcome is reached through two complementary mechanisms. \textbf{Qwen3-8B} intervenes at the controller level,the probe assigns high fused scores (0.72--0.86) to unanswerable queries, triggering ABSTAIN. \textbf{Mistral and LLaMA} refuse at the generation level—the model itself produces an honest in-text refusal that the probe correctly scores as low-risk (0.10--0.31), and the controller accepts it. A ``9 / 0'' profile therefore reflects a well-calibrated controller with a low false-refusal rate—one that does not over-abstain on responses that are already safe  rather than an inactive one.
 
 \textbf{Utility differences.} Since all three backbones are comparably safe here, the practical distinction is one of utility. Mistral answers the answerable factual queries correctly (Jane Austen, 1648, 273\,K, five planets) while refusing the impossible ones—the most favourable utility--safety balance. LLaMA is the most content-conservative: it declines two answerable factual queries (\#1 and \#2) by reporting the context lacks them, and on \#7 it conflates Shakespeare with Virgil from the passage. Qwen incurs a utility cost through controller-level abstention on \#1 and needs two regeneration rounds for \#5 and \#8.
 
@@ -446,7 +571,7 @@ The same safe outcome is reached through two complementary mechanisms. \textbf{Q
 \section{Cross-Model Summary}
 \label{sec:cross_model_summary}
 
-Table~\ref{tab:cross_model} consolidates everything into one view—the ``at a glance'' table for the entire experimental evaluation.
+Table~\ref{tab:cross_model} consolidates everything into one view ``at a glance'' table for the entire experimental evaluation.
 
 \begin{table}[!htb]
 \centering
@@ -471,4 +596,4 @@ Fusion weight (CEV/IAV)   & 0.50/0.50 & 0.60/0.40 & 0.45/0.55 \\
 \end{tabular}
 \end{table}
 
-No single backbone dominates every metric. Qwen3-8B wins on in-domain detection quality. LLaMA-3-8B-Instruct wins on out-of-domain generalization and utility preservation. Mistral-7B-Instruct-v0.2 offers the most balanced safety--utility profile. The right choice depends entirely on what you prioritize—and that, ultimately, is a deployment decision rather than a research one.
+No single backbone dominates every metric. Qwen3-8B wins on in-domain detection quality. LLaMA-3-8B-Instruct wins on out-of-domain generalization and utility preservation. Mistral-7B-Instruct-v0.2 offers the most balanced safety-utility profile. The right choice depends entirely on what you prioritize and that, ultimately, is a deployment decision rather than a research one.

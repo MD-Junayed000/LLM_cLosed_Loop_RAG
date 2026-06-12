@@ -1,17 +1,17 @@
 \chapter{System Architecture}
 \label{ch:system_architecture}
 
-This chapter puts all the pieces together. We have already established what signals we want (CEV and IAV) and why (Chapter~\ref{ch:background}). Now we describe how those signals fit into a working system—one that retrieves, generates, probes, decides, and sometimes retries. The chapter moves from a bird's-eye overview down through each functional block, the mathematical formalization of feature extraction, the probe architecture, and finally a pair of worked examples showing the controller in action.
+This chapter puts all the pieces together. We have already established what signals we want (CEV and IAV) and why (Chapter~\ref{ch:background}). Now we describe how those signals fit into a working system one that retrieves, generates, probes, decides, and sometimes retries. The chapter moves from a bird's-eye overview down through each functional block, the mathematical formalization of feature extraction, the probe architecture, and finally a pair of worked examples showing the controller in action.
 
 %% -------------------------------------------------
 \section{Overview of the Closed-Loop RAG Pipeline}
 \label{sec:pipeline_overview}
 
-The high-level picture is straightforward (Figure~\ref{fig:system_overview}). A user query arrives. The retriever pulls relevant passages from a FAISS index. The frozen LLM backbone generates a candidate answer while forward hooks silently capture internal activations. Those activations are scored by two lightweight probes—one for CEV, one for IAV—and the resulting calibrated probabilities are fused into a single hallucination-risk estimate. Finally, a rule-based controller looks at that estimate together with a retrieval-quality score and decides what to do: deliver the answer, try again, fetch better evidence, or refuse politely.
+The high-level picture is straightforward (Figure~\ref{fig:system_overview}). A user query arrives. The retriever pulls relevant passages from a FAISS index. The frozen LLM backbone generates a candidate answer while forward hooks silently capture internal activations. Those activations are scored by two lightweight probes: one for CEV, one for IAV and the resulting calibrated probabilities are fused into a single hallucination-risk estimate. Finally, a rule-based controller looks at that estimate together with a retrieval-quality score and decides what to do: deliver the answer, try again, fetch better evidence, or refuse politely.
 
 \begin{figure}[!htb]
     \centering
-    \includegraphics[width=0.90\textwidth]{Images/overall_view_system_architecture.png}
+    \includegraphics[width=1.00\textwidth]{Images/overall_view_system_architecture.png}
     \caption[High-level overview of the self-correcting closed-loop RAG system.]{High-level overview of the self-correcting closed-loop RAG system for hallucination mitigation. The pipeline flows from user query through retrieval, generation with hooks, probing, risk scoring, and controller decision.}
     \label{fig:system_overview}
 \end{figure}
@@ -21,11 +21,11 @@ The high-level picture is straightforward (Figure~\ref{fig:system_overview}). A 
 \label{sec:core_blocks}
 
 The system breaks down into four main blocks. Let us walk through each one.
-
+\newpage
 \subsection{Retrieval Engine}
 \label{subsec:retrieval_engine}
 
-Nothing exotic here—we use a standard dense-retrieval setup~\cite{karpukhin2020dpr}. Documents are encoded with the BAAI/bge-base-en-v1.5 embedding model~\cite{xiao2023bge}, which produces 768-dimensional vectors. These get indexed using FAISS~\cite{johnson2019faiss}. At query time, the same embedding model encodes the user query, and we retrieve the top-$k$ most similar passages.
+We use a standard dense-retrieval setup~\cite{karpukhin2020dpr}. Documents are encoded with the BAAI/bge-base-en-v1.5 embedding model~\cite{xiao2023bge}, which produces 768-dimensional vectors. These get indexed using FAISS~\cite{johnson2019faiss}. At query time, the same embedding model encodes the user query, and we retrieve the top-$k$ most similar passages.
 
 We also compute a retrieval quality score—basically, how good a match did we get?
 
@@ -46,7 +46,7 @@ The retrieved context and user query get assembled into a prompt and fed to a fr
     \item Qwen3-8B
 \end{itemize}
 
-``Frozen'' means we never touch the model weights—the backbone generates exactly as it normally would. The only addition is a forward hook registered at a single mid-depth layer (roughly $L/2$). That hook captures two things: the residual-stream output $\mathbf{z}_{\text{CEV}}^{(\ell^*)}$ and the SwiGLU intermediate $\mathbf{z}_{\text{IAV}}^{(\ell^*)}$. Why one layer rather than three? Section~\ref{sec:layer_selection} has the empirical answer.
+``Frozen'' means we never touch the model weights, the backbone generates exactly as it normally would. The only addition is a forward hook registered at a single mid-depth layer (roughly $L/2$). That hook captures two things: the residual-stream output $\mathbf{z}_{\text{CEV}}^{(\ell^*)}$ and the SwiGLU intermediate $\mathbf{z}_{\text{IAV}}^{(\ell^*)}$. Why one layer rather than three? Section~\ref{sec:layer_selection} has the empirical answer.
 
 \subsection{Hallucination Detection Network}
 \label{subsec:detection_network}
@@ -63,14 +63,14 @@ Each probe outputs a hallucination probability:
     p_{\text{IAV}} &= P(y = 1 \mid \boldsymbol{\psi}(\mathbf{x})) \label{eq:piav}
 \end{align}
 
-\noindent These are then combined through a validation-tuned convex combination—our central fusion equation:
+\noindent These are then combined through a validation-tuned convex combination; our central fusion equation:
 
 \begin{equation}
     \boxed{\;p_{\text{fused}} = w \cdot p_{\text{CEV}} + (1 - w) \cdot p_{\text{IAV}}\;}
     \label{eq:pfused}
 \end{equation}
 
-The weight $w$ is chosen on the validation split to maximize AUROC. Interestingly, the optimal weights are not the same across models: Mistral lands at an even $0.50/0.50$ split, Qwen leans slightly toward CEV ($0.60/0.40$), and LLaMA tilts marginally toward IAV ($0.45/0.55$). The takeaway is that both signals contribute meaningful information regardless of backbone—neither one dominates universally.
+The weight $w$ is chosen on the validation split to maximize AUROC. Interestingly, the optimal weights are not the same across models: Mistral lands at an even $0.50/0.50$ split, Qwen leans slightly toward CEV ($0.60/0.40$), and LLaMA tilts marginally toward IAV ($0.45/0.55$). The takeaway is that both signals contribute meaningful information regardless of backbone neither one dominates universally.
 
 \subsection{Closed-Loop Policy Controller}
 \label{subsec:controller_overview}
@@ -81,21 +81,25 @@ The controller is the decision-maker. It takes $p_{\text{fused}}$, the retrieval
 \centering
 \caption{Main system components and their roles.}
 \label{tab:system_components}
-\small
-\begin{tabularx}{\textwidth}{@{}l l X l l@{}}
+\footnotesize
+\renewcommand{\arraystretch}{1.25}
+\setlength{\tabcolsep}{4pt}
+
+\begin{tabularx}{\textwidth}{@{}p{2.1cm} p{2.1cm} X p{2.1cm} p{2.4cm}@{}}
 \toprule
 \textbf{Component} & \textbf{Input} & \textbf{Operation} & \textbf{Output} & \textbf{Purpose} \\
 \midrule
-Retrieval Engine & User query & BGE embedding + FAISS top-$k$ & Passages + $q_{\text{ret}}$ & External evidence \\
-LLM Backbone & Query + context & Frozen generation & Response & Answer generation \\
+Retrieval Engine & User query & BGE + FAISS top-$k$ retrieval & Passages + $q_{\text{ret}}$ & Evidence source \\
+LLM Backbone & Query + context & Frozen response generation & Response & Answer generation \\
 Hook Extractor & Activations & Capture CEV/IAV at $\ell^*$ & $\boldsymbol{\phi}$, $\boldsymbol{\psi}$ & Internal signals \\
-CEV Probe & CEV vector & MLP classifier & $p_{\text{CEV}}$ & Residual-stream risk \\
-IAV Probe & IAV vector & MLP classifier & $p_{\text{IAV}}$ & FFN risk \\
-Fusion Module & $p_{\text{CEV}}$, $p_{\text{IAV}}$ & Weighted fusion & $p_{\text{fused}}$ & Final risk score \\
-Controller & $p_{\text{fused}}$, $q_{\text{ret}}$, retries & Rule-based policy & Action & System behavior \\
+CEV Probe & CEV vector & MLP classification & $p_{\text{CEV}}$ & Residual risk \\
+IAV Probe & IAV vector & MLP classification & $p_{\text{IAV}}$ & FFN risk \\
+Fusion Module & Probe scores & Weighted score fusion & $p_{\text{fused}}$ & Final risk score \\
+Controller & Risk + retrieval score & Rule-based decision & Action & System control \\
 \bottomrule
 \end{tabularx}
 \end{table}
+
 
 %% -------------------------------------------------
 \section{Detailed Architecture}
@@ -105,8 +109,8 @@ Figure~\ref{fig:full_architecture} expands the pipeline into its full detail. Th
 
 \begin{figure}[!htb]
     \centering
-    \includegraphics[width=0.95\textwidth]{Images/Proposed_Closed-Loop_RAG_System.png}
-    \caption[Proposed closed-loop RAG architecture with internal-state probing.]{Proposed closed-loop RAG architecture with internal-state probing. The controller can accept the response, trigger regeneration, request new retrieval, or abstain—all based on the fused probe probability.}
+    \includegraphics[width=1.05\textwidth]{Images/Proposed_Closed-Loop_RAG_System.png}
+    \caption[Proposed closed-loop RAG architecture with internal-state probing.]{Proposed closed-loop RAG architecture with internal-state probing. The controller can accept the response, trigger regeneration, request new retrieval, or abstain; all based on the fused probe probability.}
     \label{fig:full_architecture}
 \end{figure}
 
@@ -164,7 +168,7 @@ Qwen3-8B                  & 36 & 18 & 4096 & 12288 & 4096 & 12288 \\
 
 Before settling on a single layer, we had to answer a fundamental design question: \emph{does concatenating features from multiple depths actually help, or does it just triple the probe size without meaningful gain?}
 
-An earlier version of the system fed features from three proportional depths—$L/4$, $L/2$, and $3L/4$—into the probe as a concatenated input. To test whether that extra width was earning its keep, we ran a controlled ablation across all three backbones. Table~\ref{tab:layer_ablation} tells the story.
+An earlier version of the system fed features from three proportional depths—$L/4$, $L/2$, and $3L/4$ into the probe as a concatenated input. To test whether that extra width was earning its keep, we ran a controlled ablation across all three backbones. Table~\ref{tab:layer_ablation} tells the story.
 
 \begin{table}[!htb]
 \centering
@@ -186,7 +190,7 @@ triple (all three)    & 3 & 14.22M & 0.8179          & 0.8427          & 0.8305 
 \end{tabular}
 \end{table}
 
-The pattern is clear. The single mid-depth layer wins or ties for the best AUROC on every backbone, and it does so with 4.79M parameters rather than 14.22M. The triple concatenation—which costs three times as much—actually performs \emph{worse} than mid alone on two of the three models. The early layer ($L/4$) is consistently the weakest, suggesting that the hallucination-relevant signal has not yet formed at quarter depth.
+The pattern is clear. The single mid-depth layer wins or ties for the best AUROC on every backbone, and it does so with 4.79M parameters rather than 14.22M. The triple concatenation which costs three times as much actually performs \emph{worse} than mid alone on two of the three models. The early layer ($L/4$) is consistently the weakest, suggesting that the hallucination-relevant signal has not yet formed at quarter depth.
 
 Figures~\ref{fig:layerwise_single}--\ref{fig:layerwise_heatmap} visualize this comparison from multiple angles.
 
@@ -206,22 +210,26 @@ Figures~\ref{fig:layerwise_single}--\ref{fig:layerwise_heatmap} visualize this c
 
 \begin{figure}[!htb]
     \centering
-    \includegraphics[width=0.85\textwidth]{Images/layerwise_auroc_heatmap_and_params_scatter.png}
+    \includegraphics[width=1.00\textwidth]{Images/layerwise_auroc_heatmap_and_params_scatter.png}
     \caption{AUROC heatmap across configurations and AUROC-vs-probe-size scatter plot.}
     \label{fig:layerwise_heatmap}
 \end{figure}
 
 \textbf{Our decision:} read CEV and IAV from a single mid-depth layer at $L/2$. That means layer~16 for the 32-layer Mistral and LLaMA, and layer~18 for the 36-layer Qwen. The three-layer configuration is officially retired—though we compare training dynamics and out-of-domain transfer against it one more time in Section~\ref{sec:triple_comparison}, just to be thorough.
 
+\newpage
 %% -------------------------------------------------
 \section{Probe Architecture and Calibration}
 \label{sec:probe_arch}
 
-Each hallucination probe is deliberately kept small—a two-hidden-layer MLP. We use separate probes for CEV and IAV because these features live in different vector spaces (4,096-dim vs. 12,288--14,336-dim) and represent fundamentally different computational signals.
+Each hallucination probe is deliberately kept small: a two-hidden-layer MLP. We use separate probes for CEV and IAV because these features live in different vector spaces (4,096-dim vs. 12,288--14,336-dim) and represent fundamentally different computational signals.
 
 The architecture, written out as a pipeline:
 \[
-    \text{Input} \to \text{Linear}(d, 256) \to \text{BN} \to \text{ReLU} \to \text{Dropout} \to \text{Linear}(256, 128) \to \text{BN} \to \text{ReLU} \to \text{Dropout} \to \text{Linear}(128, 2)
+\begin{aligned}
+\text{Input} &\to \text{Linear}(d, 256) \to \text{BN} \to \text{ReLU} \to \text{Dropout} \\
+&\to \text{Linear}(256, 128) \to \text{BN} \to \text{ReLU} \to \text{Dropout} \to \text{Linear}(128, 2)
+\end{aligned}
 \]
 
 After training, we apply temperature scaling to the output logits before computing the softmax:
@@ -231,7 +239,7 @@ After training, we apply temperature scaling to the output logits before computi
     \label{eq:temp_scaling}
 \end{equation}
 
-\noindent The temperature $T$ is tuned on the validation split by minimizing negative log-likelihood. This calibration step is important because the controller needs well-calibrated probabilities, not just good rankings—it makes threshold-based decisions, so the absolute probability values matter.
+\noindent The temperature $T$ is tuned on the validation split by minimizing negative log-likelihood. This calibration step is important because the controller needs well-calibrated probabilities, not just good rankings it makes threshold-based decisions, so the absolute probability values matter.
 
 \begin{table}[!htb]
 \centering
@@ -261,15 +269,19 @@ Output          & $P_{\text{hallucination}}$ \\
 \section{Training and Fusion Summary}
 \label{sec:training_fusion_summary}
 
-The probes are trained on labeled RAG hallucination examples (from RAGTruth) using class-weighted cross-entropy with label smoothing. We optimize with AdamW~\cite{loshchilov2019adamw,kingma2015adam} and apply temperature scaling for post-training calibration~\cite{guo2017calibration}. The two probes are trained independently—they never see each other's features—and fused only after calibration via Eq.~\eqref{eq:pfused}.
+The probes are trained on labeled RAG hallucination examples (from RAGTruth) using class-weighted cross-entropy with label smoothing. We optimize with AdamW~\cite{loshchilov2019adamw,kingma2015adam} and apply temperature scaling for post-training calibration~\cite{guo2017calibration}. The two probes are trained independently, they never see each other's features and fused only after calibration via Eq.~\eqref{eq:pfused}.
 
 Full training details (optimizer settings, learning rates, early stopping, etc.) are consolidated in Table~\ref{tab:training_config} in Section~\ref{sec:training_protocol}.
 
 %% -------------------------------------------------
+\newpage
+
 \section{Controller Policy}
 \label{sec:controller_policy_ch5}
 
 The controller picks one of four actions based on the fused score, retrieval quality, and retry count. We defer the full decision rule to Section~\ref{sec:controller_logic} in Chapter~\ref{ch:controller}, but the per-backbone thresholds are summarized here for reference.
+
+
 
 \begin{table}[!htb]
 \centering
@@ -293,7 +305,7 @@ Degeneration guard & 4-gram rep.\ ratio & 4-gram rep.\ ratio & 4-gram rep.\ rati
 \section{Example Closed-Loop Trace}
 \label{sec:example_trace_ch5}
 
-To make the system concrete, here are two worked examples showing what happens end-to-end. The numbers are illustrative—they show the kind of computation the controller performs, not exact logged values.
+To make the system concrete, here are two worked examples showing what happens end-to-end. The numbers are illustrative, they show the kind of computation the controller performs, not exact logged values.
 
 \begin{groundedbox}[Example A: Grounded Response $\to$ ACCEPT]
 \begin{tabular}{@{}r@{\hspace{8pt}}p{10.5cm}@{}}
@@ -323,9 +335,10 @@ To make the system concrete, here are two worked examples showing what happens e
 \end{hallucinatedbox}
 
 \vspace{0.3em}
-\noindent Here both probes fire strongly—the CEV shows poor context coherence, and the IAV shows confabulation patterns. The fused score exceeds the abstention threshold, so the system refuses rather than delivering a fabricated number.
+\noindent Here both probes fire strongly, the CEV shows poor context coherence, and the IAV shows confabulation patterns. The fused score exceeds the abstention threshold, so the system refuses rather than delivering a fabricated number.
 
 %% -------------------------------------------------
+\newpage
 \section{Detailed Probing and Probability-Level Fusion Diagram}
 \label{sec:fusion_diagram}
 
@@ -337,7 +350,7 @@ Figure~\ref{fig:detailed_methodology} zooms into the probing and fusion machiner
 
 \begin{figure}[!htb]
     \centering
-    \includegraphics[width=0.95\textwidth]{Images/Detailed_Methodology.png}
+    \includegraphics[width=1.05\textwidth]{Images/Detailed_Methodology.png}
     \caption[Detailed methodology for internal-state probing, calibration, and fusion.]{Detailed methodology for internal-state probing, temperature calibration, and probability-level fusion. Panel~A covers activation extraction; Panel~B covers probe scoring, calibration, fusion, and controller handoff.}
     \label{fig:detailed_methodology}
 \end{figure}

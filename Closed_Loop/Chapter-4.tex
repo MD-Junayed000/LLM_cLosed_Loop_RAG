@@ -41,7 +41,7 @@ Figure~\ref{fig:decoder_block} shows these two capture points schematically with
 
 \begin{figure}[!htb]
     \centering
-    \includegraphics[width=0.75\textwidth]{Images/Figure3_Single_Decoder_Block.png}
+    \includegraphics[width=1.00\textwidth]{Images/Figure3_Single_Decoder_Block.png}
     \caption[Decoder-block capture points for CEV and IAV.]{Decoder-block capture points for CEV and IAV. The CEV comes from the block output (after attention and FFN have both contributed to the residual stream). The IAV comes from inside the SwiGLU FFN, just before the final down-projection.}
     \label{fig:decoder_block}
 \end{figure}
@@ -54,7 +54,7 @@ So we have two signals, and they capture genuinely different things. Let us be p
 
 The \textbf{CEV} is the residual-stream state after a decoder block has finished its work. By the time we reach a mid-depth layer, this vector encodes not just token identity but how the model has blended the retrieved context with the query and with whatever text it has generated so far. If the model is integrating the evidence well, the CEV should reflect that. If it is ignoring the context or mixing it with contradictory parametric knowledge, the CEV may show signs of that too.
 
-The \textbf{IAV} is something different entirely. It reflects what the feed-forward network is contributing—the parametric signal that will be added to the residual stream. This is theoretically motivated by work showing that FFN layers behave like key-value memories, storing factual associations that get expressed during generation~\cite{geva2021ffn,meng2022locating}. If the model is ``remembering'' something from training and injecting it into the output—regardless of whether the retrieved context supports it—the IAV is where that signal lives.
+The \textbf{IAV} is something different entirely. It reflects what the feed-forward network is contributing the parametric signal that will be added to the residual stream. This is theoretically motivated by work showing that FFN layers behave like key-value memories, storing factual associations that get expressed during generation~\cite{geva2021ffn,meng2022locating}. If the model is ``remembering'' something from training and injecting it into the output—regardless of whether the retrieved context supports it—the IAV is where that signal lives.
 
 In practice, we extract both signals from a single mid-depth layer (approximately $L/2$), take the last-token activation, and pass the resulting vectors to lightweight MLP probes. The probes' calibrated outputs are then fused into a single hallucination-risk score. Why a single mid-depth layer? The layer-wise ablation in Section~\ref{sec:layer_selection} provides the empirical justification.
 
@@ -69,19 +69,17 @@ In practice, we extract both signals from a single mid-depth layer (approximatel
 \section{Why Activations Can Be Useful for Hallucination Detection}
 \label{sec:why_activations}
 
-At this point a skeptical reader might ask: why should internal activations tell us anything about hallucination that the output text does not? The motivation rests on two observations from prior work.
+At this point a skeptical reader might ask: why should internal activations tell us anything about hallucination that the output text doesn't? The motivation is inspired by two observations in previous work.
 
-\textbf{The residual stream encodes more than token identity.} By the middle and later layers of a transformer, the residual stream has accumulated not just what tokens appeared in the input but \emph{how} the model integrated and processed those tokens. Prior research has shown that simple classifiers trained on these hidden states can predict factuality and truthfulness at non-trivial accuracy~\cite{azaria2023saplma}. The surface text might look fine, but the internal representations can betray uncertainty or inconsistency.
+\textbf{The residual stream encodes more than just token identity.} The residual stream in the middle and later layers of a transformer has accumulated not just what tokens appeared in the input but \emph{how} the model integrated and processed those tokens. Simple classifiers trained on these hidden states have been shown to predict factuality and truthfulness with non-trivial accuracy in prior work~\cite{azaria2023saplma}. The surface text might look fine, but the internal representations might show uncertainty or inconsistency. \textbf{FFN layers are not generic nonlinearities. Mechanistic interpretability work has found that transformer FFN layers work somewhat like key-value memories \cite{geva2021ffn}. Stored associations are triggered by input patterns and those associations influence what the model generates next. Factual knowledge can be localized and even modified within specific FFN modules~\cite{meng2022locating}. This suggests that the IAV signal, the intermediate activation before downprojection, might encode a very direct signature of what parametric knowledge the model is injecting.
 
-\textbf{FFN layers are not just generic nonlinearities.} Mechanistic interpretability work has revealed that transformer FFN layers function somewhat like key-value memories~\cite{geva2021ffn}. Input patterns activate stored associations, and those associations influence what the model generates next. Factual knowledge can be localized within specific FFN modules and even edited there~\cite{meng2022locating}. This means the IAV signal—the intermediate activation before down-projection—may carry a particularly direct signature of what parametric knowledge the model is injecting.
-
-We do not claim that either signal is a perfect hallucination detector on its own. The hypothesis is more modest: CEV and IAV provide \emph{complementary evidence}. CEV captures how well the model integrated the retrieved context. IAV captures what the feed-forward network is contributing from parametric memory. When both signals agree that a response looks grounded, we have more confidence. When one or both raise a red flag, the controller can intervene.
+We do not claim that either one of the signals is a perfect hallucination detector in isolation. A less ambitious hypothesis is that CEV and IAV provide \emph{complementary evidence} . CEV measures the degree of the model’s incorporation of the retrieved context. IAV represents the parametric memory contribution of the feed-forward network. The more signals agree the more certain we are that a response appears to be grounded. If one or both flags are raised, the controller can intervene.
 
 %% -------------------------------------------------
 \section{Illustrative CEV/IAV Examples}
 \label{sec:illustrative_examples}
 
-To make these ideas concrete, we walk through three example scenarios. These are illustrative—the activation values shown are truncated and schematic rather than literal neuron readouts. The point is to show \emph{how} the probe interprets different activation patterns, including a case where it fails.
+We illustrate these ideas with three example scenarios. These are just illustrative, the activation values shown are schematic and truncated, not literal neuron readouts. The point is to show \emph{how} the probe interprets various activation patterns, including a failure case.
 
 \subsection{Grounded Response}
 

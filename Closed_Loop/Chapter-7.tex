@@ -1,7 +1,7 @@
 \chapter{Closed-Loop Policy Controller}
 \label{ch:controller}
 
-Up to this point, we have a system that can detect hallucination risk—but detecting is not the same as \emph{doing something about it}. This chapter is about the ``doing'' part. We describe how the fused hallucination probability gets turned into an actual operational decision: should the response go to the user, should the system try again, or should it just say ``I don't know''?
+Up to this point, we have a system that can detect hallucination risk but detecting is not the same as \emph{doing something about it}. This chapter is about the ``doing'' part. We describe how the fused hallucination probability gets turned into an actual operational decision: should the response go to the user, should the system try again, or should it just say ``I don't know''?
 
 %% -------------------------------------------------
 \section{Purpose of the Controller}
@@ -64,7 +64,7 @@ The policy is entirely deterministic—no learned weights, no stochastic samplin
 \label{eq:controller_rule}
 \end{equation}
 
-The logic is read top to bottom—first check wins. The interesting part is what happens in the middle zone, when the risk is elevated but not extreme. There, the controller asks a follow-up question: \emph{was the retrieval any good?} If the evidence looks weak ($q_{\text{ret}}$ below threshold), the problem is probably upstream—bad retrieval—so the system fetches new evidence. If the evidence was fine but the answer is still risky, the problem is likely in generation itself, so the system regenerates with the same context.
+The logic is read top to bottom—first check wins. The interesting part is what happens in the middle zone, when the risk is elevated but not extreme. There, the controller asks a follow-up question: \emph{was the retrieval any good?} If the evidence looks weak ($q_{\text{ret}}$ below threshold), the problem is probably upstream bad retrieval so the system fetches new evidence. If the evidence was fine but the answer is still risky, the problem is likely in generation itself, so the system regenerates with the same context.
 
 %% -------------------------------------------------
 \section{Semantic Meaning of Each Controller Action}
@@ -97,39 +97,54 @@ The key distinction worth emphasizing: REGENERATE blames the generator, while RE
 
 To make the controller's behavior tangible, consider the following illustrative trace. We ask about the location of Atlantis—a query designed to invite a confident hallucination, since the premise is fictional. Figure~\ref{fig:atlantis_trace} walks through what the controller does step by step.
 
-\begin{figure}[!htb]
-    \centering
-    \includegraphics[width=0.90\textwidth]{Images/Query_Trace.png}
-    \caption[Closed-loop Atlantis query trace (illustrative).]{Closed-loop Atlantis query trace (illustrative). The system starts with a high-risk unsupported claim, tries re-retrieval, regenerates once more, and finally accepts a safe mythological framing.}
-    \label{fig:atlantis_trace}
-\end{figure}
-
 \begin{table}[!htb]
 \centering
 \caption{Atlantis closed-loop trace (illustrative, not a logged run).}
 \label{tab:atlantis_trace}
-\small
-\begin{tabular}{@{}c p{2.5cm} p{3.8cm} c l l p{2cm}@{}}
+\footnotesize
+\renewcommand{\arraystretch}{1.35}
+\setlength{\tabcolsep}{3.5pt}
+
+\begin{tabularx}{\textwidth}{@{}c p{2.0cm} X c p{1.3cm} p{1.8cm} X@{}}
 \toprule
 \textbf{Iter.} & \textbf{Retrieved} & \textbf{Response} & $p_{\text{fused}}$ & \textbf{Risk} & \textbf{Decision} & \textbf{Outcome} \\
 \midrule
-1 & Mythological descriptions & ``Atlantis is in the Mediterranean Sea\ldots'' & 0.71 & Elevated & RE-RETRIEVE & Fetch better evidence \\[3pt]
-2 & Historical discussion & ``Some texts place it in the Atlantic\ldots'' & 0.69 & Moderate & REGENERATE & Try again, same evidence \\[3pt]
-3 & Refined context & ``Atlantis is mythological; I cannot verify\ldots'' & 0.22 & Low & ACCEPT & Deliver safe response \\
+
+1 & Mythological descriptions 
+& ``Atlantis is in the Mediterranean Sea\ldots'' 
+& 0.71 
+& Elevated 
+& RE-RETRIEVE 
+& Fetch better evidence \\
+
+2 & Historical discussion 
+& ``Some texts place it in the Atlantic\ldots'' 
+& 0.69 
+& Moderate 
+& REGENERATE 
+& Try again using the same evidence \\
+
+3 & Refined context 
+& ``Atlantis is mythological; I cannot verify\ldots'' 
+& 0.22 
+& Low 
+& ACCEPT 
+& Deliver safe response \\
+
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table}
 
 A few things to notice here. First, the controller did not simply refuse on the first attempt—it tried to recover. The first response was risky \emph{and} the retrieval quality was poor, so it fetched new evidence. The second time, retrieval was better but the generation was still speculative, so it regenerated. Only on the third try did the model produce something safe enough to deliver.
 
 Second, the final accepted answer is itself a kind of refusal (``Atlantis is mythological; I cannot verify a single factual location''). But from the controller's perspective, this is not an ABSTAIN—it is an ACCEPT of a response that happens to be cautious. The system accepted a low-risk output; it did not withhold a response. There is an important semantic distinction there.
 
-\textbf{A note on the live runs.} This trace is illustrative—constructed to show the full recovery path. In the actual nine-query demonstration (Section~\ref{sec:nine_query_demo}), the real Atlantis query resolved in a single attempt on all three backbones. Qwen3-8B abstained outright ($p_{\text{fused}} = 0.80$), while Mistral and LLaMA both accepted the model's own in-text refusal on the first try ($p_{\text{fused}} = 0.31$ and $0.10$ respectively). The multi-round recovery path shown here illustrates what \emph{would} happen if the first attempt landed in the intervention zone—it was not triggered by this particular query in practice.
+\textbf{A note on the live runs.} This trace is illustrative, constructed to show the full recovery path. In the actual nine-query demonstration (Section~\ref{sec:nine_query_demo}), the real Atlantis query resolved in a single attempt on all three backbones. Qwen3-8B abstained outright ($p_{\text{fused}} = 0.80$), while Mistral and LLaMA both accepted the model's own in-text refusal on the first try ($p_{\text{fused}} = 0.31$ and $0.10$ respectively). The multi-round recovery path shown here illustrates what \emph{would} happen if the first attempt landed in the intervention zone—it was not triggered by this particular query in practice.
 
 %% -------------------------------------------------
 \section{Summary}
 \label{sec:ch7_summary}
 
-The controller is deliberately simple—a handful of threshold comparisons and an if-else chain. That simplicity is a feature, not a limitation. It means the system is fully interpretable: given the three input values, anyone can trace exactly why a particular action was chosen. There are no hidden weights to debug, no stochastic decisions to second-guess.
+The controller is deliberately simple, a handful of threshold comparisons and an if-else chain. That simplicity is a feature, not a limitation. It means the system is fully interpretable: given the three input values, anyone can trace exactly why a particular action was chosen. There are no hidden weights to debug, no stochastic decisions to second-guess.
 
 What the controller achieves, despite its simplicity, is substantial. It turns hallucination detection from a passive observation (``this response might be risky'') into an active intervention (``let's try again'' or ``let's not answer''). The RAG pipeline becomes self-corrective at inference time, and it does so through a mechanism that is transparent enough to audit and explain.
