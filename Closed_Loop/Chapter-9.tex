@@ -1,0 +1,67 @@
+\chapter{Discussion}
+\label{ch:discussion}
+
+Results are only as useful as the interpretation we bring to them. This chapter steps back from the numbers and asks what they actually mean—for the hypothesis that motivated this work, for practical deployment, and for the honest acknowledgment of what we \emph{cannot} claim.
+
+%% -------------------------------------------------
+\section{Complementarity of CEV and IAV Signals}
+\label{sec:complementarity}
+
+Our first hypothesis was that CEV and IAV capture different hallucination mechanisms: weak context integration on one side, parametric-memory intrusion on the other. Is this supported by the results?
+
+Yes, to a large extent. For all three backbones, the two branches are close in ranking quality, but are not interchangeable. IAV leads for LLaMA, CEV leads for Qwen, the two are basically tied for Mistral. There is no one signal that is always the best – that is the very case where fusion creates value.
+
+Indeed, the fused probe outperforms both branches in terms of AUROC for \emph{every} backbone (Table~\ref{tab:ragtruth_results}). The gain is small in absolute terms but consistent. This indicates that CEV adds something that IAV fails to capture on its own, and vice versa. They are indeed complementary, not redundant. \textbf{Takeaway:} keeping both probes and fusing their calibrated outputs is the right design choice. collapsing to a single signal would lose reliability on whatever backbone happened to favor the dropped branch.
+
+%% -------------------------------------------------
+\section{Safety--Utility Trade-off in Closed-Loop RAG}
+\label{sec:safety_utility}
+
+One of the clearest findings from this work is that hallucination mitigation is not free. You can reduce the risk of delivering hallucinated content, but you pay for it in refused queries. The three backbones illustrate three different operating points on this trade-off curve:
+
+\begin{itemize}
+    \item \textbf{Mistral-7B-Instruct-v0.2} hits what we consider the sweet spot—it cuts the delivered proxy to 0.1068 (a 67.6\% reduction) while still answering 62\% of queries. Balanced.
+    \item \textbf{Qwen3-8B} is the safety-maximizing choice. It achieves the largest reduction (79.3\%) but at a steep cost: it refuses 58\% of the time. If your application cannot tolerate frequent ``I don't know'' responses, Qwen is not the right backbone here.
+    \item \textbf{LLaMA-3-8B-Instruct} is the utility-maximizing choice. It keeps 90\% of responses flowing, which is great for user experience, but achieves only a 45.1\% reduction. The residual hallucination proxy remains the highest of the three.
+\end{itemize}
+
+There is no universally ``best'' backbone here. The right choice depends entirely on what matters more in a given deployment: minimizing risk, maximizing throughput, or something in between. That is a product decision, not a research one.
+
+%% -------------------------------------------------
+\section{HaluEval Out-of-Distribution Transfer}
+\label{sec:halueval_discussion}
+
+How well do probes trained on one benchmark generalize to another? The honest answer is: it depends on the backbone.
+
+LLaMA-3-8B-Instruct generalizes well raw AUROC of \textbf{0.814} on HaluEval, with aligned polarity. The signal learned on RAGTruth carries over cleanly. Qwen3-8B does respectably too (\textbf{0.699}), maintaining the correct label direction.
+
+Mistral is the wild card. Its adjusted AUROC is actually the highest of the three (0.895), meaning it \emph{separates} HaluEval classes better than anyone but in the wrong direction. The polarity flips. A probe that assigns high scores to hallucinated examples on RAGTruth ends up assigning high scores to \emph{grounded} examples on HaluEval. The discriminative power is there; the calibration is not.
+
+What does this mean practically? It means you cannot simply train a probe on one distribution and trust it blindly on another. Before deploying in a new domain or with a new prompt format, you need to validate and probably recalibrate on representative target-domain examples. This is not a fatal flaw of the approach, but it is an important deployment constraint.
+
+%% -------------------------------------------------
+\section{Limitations and Threats to Validity}
+\label{sec:limitations}
+
+We are committed to being transparent about the limits of this work. Here are the limitations we know of stated in simple terms, because any reader evaluating this research deserves to know exactly where the boundaries are.
+
+\textbf{First—validation split, not test split.} Our primary AUROC numbers come from a stratified RAGTruth validation split, not the official test set. Published baselines may use different splits or preprocessing, making direct comparison somewhat apples-to-oranges. We are clear about this distinction throughout, but it bears repeating.
+
+\textbf{Second—probes are not factuality verifiers.} The probes use activation patterns to estimate hallucination \emph{risk}. They are not oracles. The probe will fail to find a confident but unfounded extraction when the model's internal state looks the same as grounded generation  (see Example~4.4.3 in Section~\ref{sec:illustrative_examples}).
+
+\textbf{Third—no usefulness measurement.} Even a technically non-hallucinated response can be vague, overly cautious, or unhelpful. That dimension of quality is not captured in our metrics.
+
+\textbf{Fourth—transfer is not guaranteed.} The HaluEval polarity inversion on Mistral makes this limitation vivid rather than hypothetical.
+
+\textbf{Fifth—a threshold controller, not a learned one.} The deterministic policy is interpretable and stable, but it may be less flexible than a well-trained learned alternative. We tried REINFORCE and it did not work well here (Appendix~D), but that does not mean a better-designed learned policy could not outperform our thresholds.
+
+\textbf{Sixth—self-referential metric.} The hallucination reduction percentages (45--79\%) are measured using our own probe as the ground truth. A controller that only delivers low-scoring responses will report low delivered risk by construction. These should be read as reductions in \emph{probe-estimated} risk, not as human-verified improvements.
+
+\textbf{Seventh—single seed, small sample.} The closed-loop evaluation uses 100 SQuAD queries at a nsingle random seed. The RE-RETRIEVE branch was barely exercised. Sampling variance is real, and multi-seed replication on a larger query set is needed to tighten the estimates.
+
+\textbf{Eighth—latency not measured.} Regeneration and re-retrieval obviously cost extra time and tokens. We did not quantify this overhead. Any latency-sensitive deployment would need that analysis.
+
+\textbf{The bottom line:} this system is better understood as an inference-time hallucination-risk control layer, rather than a full factuality oracle. The risk delivered is greatly reduced, but within the bounds of what is noted above.
+
+
+

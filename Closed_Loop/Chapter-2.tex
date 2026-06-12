@@ -1,0 +1,70 @@
+\chapter{Research Framework}
+\label{ch:research_framework}
+
+With the motivation established in Chapter~\ref{ch:introduction}, we now turn to formalizing what exactly this research sets out to accomplish. This chapter articulates the core problem, spells out our objectives, identifies the technical hurdles we had to overcome, and summarizes what we believe to be the novel contributions of this work.
+
+%% -------------------------------------------------
+\section{Problem Statement}
+\label{sec:problem_statement}
+
+RAG systems were supposed to fix the hallucination problem or at least reduce it substantially. By grounding generation in retrieved evidence, the hope was that language models would stick to what the documents actually say. In practice, though, retrieval alone does not guarantee faithfulness. A model can still hallucinate even with a perfectly relevant passage sitting in its context window.
+
+Why? Because several failure modes persist. The model might lean on its parametric memory instead of the retrieved text. It might misread a passage or only partially integrate the context. It might confidently extrapolate beyond what the evidence actually supports. The result in each case is a fluent, convincing answer that happens to be factually unsupported.
+
+The central problem we address is therefore not retrieval quality,it is the \textbf{absence of any inference-time feedback mechanism} connecting hallucination detection to corrective action. Current systems can retrieve good passages and generate polished answers, but without some internal reliability signal, they have no way to decide whether to trust what they just generated, try again, seek better evidence, or simply refuse to answer.
+
+We frame this as a control problem: \emph{internal activation signals are used to estimate hallucination risk, and that estimate is fed back into the RAG pipeline to govern the final response}. Detection without action is incomplete; our goal is to close the loop.
+
+%% -------------------------------------------------
+\section{Research Objective}
+\label{sec:research_objective}
+
+Given this framing, our objective is to design and evaluate a closed-loop RAG system capable of the following:
+
+\begin{enumerate}
+    \item \emph{Extracting internal activation features} from transformer decoder layers while the model is actively generating a response—not after the fact, but during inference.
+    \item \emph{Producing a calibrated hallucination-risk probability} by combining complementary signals from the residual stream (CEV) and the feed-forward intermediate (IAV).
+    \item \emph{Acting on that probability} through a controller that decides whether a candidate response should be delivered, regenerated with the same context, supported by fresh retrieval, or withheld altogether.
+    \item \emph{Demonstrating measurable risk reduction}—showing that the closed-loop controller actually reduces the hallucination risk of delivered responses compared to vanilla single-pass RAG.
+    \item \emph{Generalizing across backbones}—testing the same framework on multiple decoder-only transformers without altering their architectures or retraining their weights.
+\end{enumerate}
+
+%% -------------------------------------------------
+\section{Technical Challenges}
+\label{sec:technical_challenges}
+
+Building such a system is not straightforward. Three specific challenges had to be addressed.
+
+\textbf{The detection–action disconnect.} In most existing work, hallucination detection and hallucination mitigation live in separate pipelines. A detector might flag a response as risky, but that flag does not trigger any automatic corrective behavior. We needed to wire the detection signal directly into an inference-time controller—making the two inseparable parts of a single system.
+
+\textbf{Inference-time efficiency.} Whatever signal we use for detection has to be cheap enough to compute on every generated response. Methods that require multiple sampled generations or a separate judge model are too expensive for real-time closed-loop control. Our approach uses internal activation features that are already being computed anyway—we just observe them through hooks.
+
+\textbf{Capturing multiple hallucination mechanisms.} Hallucination is not a single phenomenon. Sometimes the model fails to attend properly to the retrieved context (a context-integration failure). Other times it confidently injects something from its parametric memory that contradicts the evidence (a parametric-memory intrusion). A single activation signal might catch one type but miss the other. That is why we combine both CEV (residual-stream) and IAV (FFN intermediate) signals they look at different parts of the computation and capture different failure modes.
+
+%% -------------------------------------------------
+\section{Novelty and Contributions}
+\label{sec:contributions}
+
+We claim five main contributions, each addressing a gap in the existing literature.
+
+\noindent\textbf{Contribution~1 - Dual-signal internal-state probing.} Rather than relying on a single hidden-state source, the framework extracts two complementary signals: CEV features from the decoder residual stream and IAV features from the SwiGLU feed-forward intermediate. The underlying hypothesis is that hallucination can stem from either weak context integration or parametric-memory intrusion—and catching both requires looking at both.
+
+\noindent\textbf{Contribution~2 — Inference-time closed-loop control.} Detection alone is not enough. The calibrated probe probability feeds directly into a controller that makes real decisions: accept, regenerate, re-retrieve, or abstain. This transforms hallucination detection from a post-hoc annotation exercise into an operational safety mechanism.
+
+\noindent\textbf{Contribution~3 — Multi-backbone evaluation.} We evaluate the identical framework on three different decoder-only transformer backbones—Mistral-7B-Instruct-v0.2, LLaMA-3-8B-Instruct, and Qwen3-8B—providing evidence about whether the CEV/IAV probing strategy is specific to one model or generalizes across the SwiGLU decoder family.
+
+\noindent\textbf{Contribution~4 — Transparent evaluation protocol.} We are explicit about what is a validation-split result and what is a comparison against published baselines. The evaluation reports probe performance, controller behavior, and out-of-domain transfer separately, avoiding the conflation that sometimes obscures what was actually measured.
+
+\noindent\textbf{Contribution~5 — A parameter-efficient single mid-layer probe.} Our layer-wise ablation (Section~\ref{sec:layer_selection}) demonstrates that reading from just one mid-depth layer ($L/2$) matches or outperforms the originally deployed three-layer concatenation on every backbone—while using roughly a third of the probe parameters. Less is genuinely more here.
+
+%% -------------------------------------------------
+\section{Evaluation Scope}
+\label{sec:evaluation_scope}
+
+We evaluate the framework at two distinct levels, each answering a different question.
+
+\emph{First, as a detector:} Can the CEV and IAV probes reliably rank responses by hallucination risk? We assess this on a stratified RAGTruth validation split, reporting individual and fused AUROC values. The decoder depth feeding the probes is itself selected empirically through the layer-wise ablation (Section~\ref{sec:layer_selection}), not assumed a priori.
+
+\emph{Second, as a controller:} Does the fused risk estimate, when fed into the closed-loop policy, actually reduce the hallucination risk of responses that get delivered to the user? We measure this by tracking how often the controller accepts, regenerates, re-retrieves, or abstains—and comparing the delivered-proxy hallucination rate against vanilla RAG.
+
+All numerical results—backbone-specific AUROC values, controller-branch statistics, closed-loop reduction percentages—appear in Chapter~\ref{ch:results}.

@@ -1,0 +1,19 @@
+\clearpage
+\setcounter{secnumdepth}{-1}
+\section{\hfil Abstract \hfil}
+\vspace{0.05cm}
+\thispagestyle{front}
+
+Hallucination remains one of the most stubborn problems in retrieval-augmented generation (RAG). Even when relevant evidence is retrieved, the language model may still produce unfaithful output and existing mitigation methods typically stop at detection. They assign a risk score or flag a problematic response, but they do not feed that signal back into the generation process to actually prevent the hallucination from reaching the user.
+
+This thesis proposes a \textbf{closed-loop RAG framework} that bridges the gap between detection and action. The system instruments frozen decoder-only language models with PyTorch forward hooks and extracts two complementary activation signals: \textbf{Contextualized Embedding Vectors (CEV)} from the residual stream capturing context-integration behavior and \textbf{Intermediate Activation Vectors (IAV)} from the SwiGLU feed-forward sublayer before the down-projection—capturing parametric-memory contributions. Separate lightweight MLP probes are trained on RAGTruth hallucination labels, temperature-calibrated, and fused into a single hallucination-risk probability. This probability drives a deterministic four-action controller: \textsc{Accept}, \textsc{Regenerate}, \textsc{Re-Retrieve}, or \textsc{Abstain} where intervention triggers corrective behavior before any response is delivered.
+
+To our knowledge, this is the first framework to connect dual internal activation probes from frozen SwiGLU decoder LLMs to a multi-action inference-time controller for hallucination mitigation.
+
+The framework is evaluated on three open-weight backbones—Mistral-7B-Instruct-v0.2, Qwen3-8B, and LLaMA-3-8B-Instruct using Google Colab A100 FP16 experiments. On a stratified RAGTruth validation split, the fused probe achieves AUROC scores of \textbf{0.8596}, \textbf{0.8808}, and \textbf{0.8689} respectively, surpassing all published and reproduced baselines considered in this study. Closed-loop intervention reduces the hallucination proxy delivered over vanilla RAG across all three backbones, which cover a clear safety-utility spectrum: Mistral-7B-Instruct-v0.2 attains the lowest delivered proxy at a balanced acceptance rate, Qwen3-8B yields the largest relative reduction, but is the most conservative, and LLaMA-3-8B-Instruct preserves the most answers.
+These results suggest that internal activation signals can support practical inference-time hallucination control across decoder families based on SwiGLU, while probe training and controller thresholds remain backbone-specific due to model-dependent activation distributions.
+\\
+\textbf{Keywords:} Retrieval-Augmented Generation, Hallucination Mitigation, Internal Activation Probing, Closed-Loop Inference Control, Transformer Representations, RAGTruth.
+
+\setcounter{secnumdepth}{1}
+\clearpage

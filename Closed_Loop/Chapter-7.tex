@@ -1,0 +1,150 @@
+\chapter{Closed-Loop Policy Controller}
+\label{ch:controller}
+
+Up to this point, we have a system that can detect hallucination risk but detecting is not the same as \emph{doing something about it}. This chapter is about the ``doing'' part. We describe how the fused hallucination probability gets turned into an actual operational decision: should the response go to the user, should the system try again, or should it just say ``I don't know''?
+
+%% -------------------------------------------------
+\section{Purpose of the Controller}
+\label{sec:controller_purpose}
+
+The preceding chapters built up a detection pipeline: extract CEV and IAV features, score them with calibrated probes, fuse the results into $p_{\text{fused}}$. But a number on its own does not help the user. What matters is what the system \emph{does} with that number.
+
+That is the controller's job. It takes the hallucination-risk estimate and converts it into an inference-time action. Not a label, not a flag in a log file—an action that changes what happens next in the pipeline.
+
+The controller receives three inputs:
+\begin{itemize}
+    \item $p_{\text{fused}}$—the calibrated fused hallucination-risk probability (from Chapter~\ref{ch:probe_training})
+    \item $q_{\text{ret}}$—the retrieval-quality score, computed as the mean similarity of the top-$k$ retrieved passages
+    \item $r$—the current retry count (how many times we have already looped)
+\end{itemize}
+
+And it picks one of four actions:
+\[
+    \mathcal{A} = \{\textsc{Accept},\; \textsc{Regenerate},\; \textsc{Re-Retrieve},\; \textsc{Abstain}\}
+\]
+
+%% -------------------------------------------------
+\section{Controller Inputs and Thresholds}
+\label{sec:controller_inputs}
+
+Three thresholds govern the controller's behavior. Each one answers a different question.
+
+\begin{table}[!htb]
+\centering
+\caption{Controller threshold symbols and their roles.}
+\label{tab:threshold_symbols}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Question It Answers} \\
+\midrule
+$\theta_{\text{hallu}}$ & Intervention threshold & Is the response safe enough to deliver? \\
+$\theta_{\text{abs}}$   & Abstention threshold  & Is the response so risky we should give up? \\
+$\theta_{\text{ret}}$   & Retrieval-quality threshold & Was the retrieved evidence good enough? \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Two of these are fixed across all backbones in our experiments: $\theta_{\text{ret}} = 0.30$ and $\text{MAX\_RETRIES} = 3$. The hallucination and abstention thresholds vary per backbone because each model's activation distribution produces different probe-score ranges (see Table~\ref{tab:controller_config}).
+
+%% -------------------------------------------------
+\section{Controller Decision Logic}
+\label{sec:controller_logic}
+
+The policy is entirely deterministic—no learned weights, no stochastic sampling, no neural network in the loop. Given $p_{\text{fused}}$, $q_{\text{ret}}$, and retry count $r$, the controller follows this rule:
+
+\begin{equation}
+\text{Action} = 
+\begin{cases}
+    \textsc{Abstain}      & \text{if } r \geq \text{MAX\_RETRIES} \\[4pt]
+    \textsc{Accept}       & \text{if } p_{\text{fused}} < \theta_{\text{hallu}} \\[4pt]
+    \textsc{Abstain}      & \text{if } p_{\text{fused}} \geq \theta_{\text{abs}} \\[4pt]
+    \textsc{Re-Retrieve}  & \text{if } \theta_{\text{hallu}} \leq p_{\text{fused}} < \theta_{\text{abs}} \;\wedge\; q_{\text{ret}} < \theta_{\text{ret}} \\[4pt]
+    \textsc{Regenerate}   & \text{if } \theta_{\text{hallu}} \leq p_{\text{fused}} < \theta_{\text{abs}} \;\wedge\; q_{\text{ret}} \geq \theta_{\text{ret}}
+\end{cases}
+\label{eq:controller_rule}
+\end{equation}
+
+The logic is read top to bottom—first check wins. The interesting part is what happens in the middle zone, when the risk is elevated but not extreme. There, the controller asks a follow-up question: \emph{was the retrieval any good?} If the evidence looks weak ($q_{\text{ret}}$ below threshold), the problem is probably upstream bad retrieval so the system fetches new evidence. If the evidence was fine but the answer is still risky, the problem is likely in generation itself, so the system regenerates with the same context.
+
+%% -------------------------------------------------
+\section{Semantic Meaning of Each Controller Action}
+\label{sec:action_semantics}
+
+Each action carries a distinct meaning about where the system thinks the problem lies.
+
+\begin{table}[!htb]
+\centering
+\caption{What each action means and what the system does.}
+\label{tab:action_semantics}
+\small
+\begin{tabular}{@{}l p{3cm} p{4cm} p{4cm}@{}}
+\toprule
+\textbf{Action} & \textbf{When It Fires} & \textbf{What It Means} & \textbf{What Happens} \\
+\midrule
+\textbf{ACCEPT} & $p_{\text{fused}} < \theta_{\text{hallu}}$ & ``Looks safe'' & Deliver the response to the user \\[4pt]
+\textbf{REGENERATE} & Moderate risk, good retrieval & ``Evidence is fine, generation isn't'' & Generate a new answer using same context \\[4pt]
+\textbf{RE-RETRIEVE} & Moderate risk, weak retrieval & ``The evidence was the problem'' & Fetch better passages, then try again \\[4pt]
+\textbf{ABSTAIN} & Very high risk or out of retries & ``Can't safely answer this'' & Return a polite refusal \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The key distinction worth emphasizing: REGENERATE blames the generator, while RE-RETRIEVE blames the retriever. This separation lets the system target its corrective effort where it is most likely to help.
+
+%% -------------------------------------------------
+\section{Example Closed-Loop Trace}
+\label{sec:trace_ch7}
+
+To make the controller's behavior tangible, consider the following illustrative trace. We ask about the location of Atlantis—a query designed to invite a confident hallucination, since the premise is fictional. Figure~\ref{fig:atlantis_trace} walks through what the controller does step by step.
+
+\begin{table}[!htb]
+\centering
+\caption{Atlantis closed-loop trace (illustrative, not a logged run).}
+\label{tab:atlantis_trace}
+\footnotesize
+\renewcommand{\arraystretch}{1.35}
+\setlength{\tabcolsep}{3.5pt}
+
+\begin{tabularx}{\textwidth}{@{}c p{2.0cm} X c p{1.3cm} p{1.8cm} X@{}}
+\toprule
+\textbf{Iter.} & \textbf{Retrieved} & \textbf{Response} & $p_{\text{fused}}$ & \textbf{Risk} & \textbf{Decision} & \textbf{Outcome} \\
+\midrule
+
+1 & Mythological descriptions 
+& ``Atlantis is in the Mediterranean Sea\ldots'' 
+& 0.71 
+& Elevated 
+& RE-RETRIEVE 
+& Fetch better evidence \\
+
+2 & Historical discussion 
+& ``Some texts place it in the Atlantic\ldots'' 
+& 0.69 
+& Moderate 
+& REGENERATE 
+& Try again using the same evidence \\
+
+3 & Refined context 
+& ``Atlantis is mythological; I cannot verify\ldots'' 
+& 0.22 
+& Low 
+& ACCEPT 
+& Deliver safe response \\
+
+\bottomrule
+\end{tabularx}
+\end{table}
+
+A few things to notice here. First, the controller did not simply refuse on the first attempt—it tried to recover. The first response was risky \emph{and} the retrieval quality was poor, so it fetched new evidence. The second time, retrieval was better but the generation was still speculative, so it regenerated. Only on the third try did the model produce something safe enough to deliver.
+
+Second, the final accepted answer is itself a kind of refusal (``Atlantis is mythological; I cannot verify a single factual location''). But from the controller's perspective, this is not an ABSTAIN—it is an ACCEPT of a response that happens to be cautious. The system accepted a low-risk output; it did not withhold a response. There is an important semantic distinction there.
+
+\textbf{A note on the live runs.} This trace is illustrative, constructed to show the full recovery path. In the actual nine-query demonstration (Section~\ref{sec:nine_query_demo}), the real Atlantis query resolved in a single attempt on all three backbones. Qwen3-8B abstained outright ($p_{\text{fused}} = 0.80$), while Mistral and LLaMA both accepted the model's own in-text refusal on the first try ($p_{\text{fused}} = 0.31$ and $0.10$ respectively). The multi-round recovery path shown here illustrates what \emph{would} happen if the first attempt landed in the intervention zone—it was not triggered by this particular query in practice.
+
+%% -------------------------------------------------
+\section{Summary}
+\label{sec:ch7_summary}
+
+The controller is deliberately simple, a handful of threshold comparisons and an if-else chain. That simplicity is a feature, not a limitation. It means the system is fully interpretable: given the three input values, anyone can trace exactly why a particular action was chosen. There are no hidden weights to debug, no stochastic decisions to second-guess.
+
+What the controller achieves, despite its simplicity, is substantial. It turns hallucination detection from a passive observation (``this response might be risky'') into an active intervention (``let's try again'' or ``let's not answer''). The RAG pipeline becomes self-corrective at inference time, and it does so through a mechanism that is transparent enough to audit and explain.

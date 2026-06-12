@@ -1,0 +1,262 @@
+\documentclass[12pt,a4paper]{report}
+
+% =====================================================
+% PAGE LAYOUT
+% =====================================================
+\usepackage[left=1.57in,top=1.18in,bottom=1in,right=1in]{geometry}
+\usepackage{setspace}
+\usepackage{float}
+\usepackage{graphicx}
+\graphicspath{{Images/}}
+\usepackage{tocloft}
+
+% =====================================================
+% LANGUAGE & FONTS (XeLaTeX Required)
+% =====================================================
+\usepackage{fontspec}
+\usepackage{polyglossia}
+
+\setdefaultlanguage{english}
+\setotherlanguage{bengali}
+
+\newfontfamily\bengalifont[Script=Bengali]{Noto Serif Bengali}
+
+% =====================================================
+% MATHEMATICS
+% =====================================================
+\usepackage{amsmath,amssymb,mathtools}
+
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclarePairedDelimiter{\abs}{\lvert}{\rvert}
+
+% =====================================================
+% TABLES & FIGURES
+% =====================================================
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{multirow}
+\usepackage{makecell}
+
+\usepackage{caption}
+\captionsetup[figure]{labelfont=bf}
+\captionsetup[table]{labelfont=bf}
+
+% =====================================================
+% COLORS & BOXES
+% =====================================================
+\usepackage[svgnames,table,dvipsnames]{xcolor}
+\usepackage{tcolorbox}
+\tcbuselibrary{skins,breakable,listings}
+
+% Define thesis colors
+\definecolor{acceptgreen}{RGB}{34,139,34}
+\definecolor{regenblue}{RGB}{30,80,180}
+\definecolor{abstainred}{RGB}{180,30,30}
+\definecolor{groundedbox}{RGB}{230,255,230}
+\definecolor{hallubox}{RGB}{255,230,230}
+\definecolor{failbox}{RGB}{255,250,220}
+\definecolor{codebg}{RGB}{245,245,250}
+\definecolor{darkblue}{RGB}{0,50,120}
+
+% Custom tcolorbox styles
+\newtcolorbox{groundedbox}[1][]{%
+    colback=groundedbox, colframe=acceptgreen!80!black,
+    fonttitle=\bfseries, title={#1},
+    arc=2mm, boxrule=0.8pt, left=4pt, right=4pt
+}
+
+\newtcolorbox{hallucinatedbox}[1][]{%
+    colback=hallubox, colframe=abstainred!80!black,
+    fonttitle=\bfseries, title={#1},
+    arc=2mm, boxrule=0.8pt, left=4pt, right=4pt
+}
+
+\newtcolorbox{failurebox}[1][]{%
+    colback=failbox, colframe=orange!80!black,
+    fonttitle=\bfseries, title={#1},
+    arc=2mm, boxrule=0.8pt, left=4pt, right=4pt
+}
+
+\newtcolorbox{activationbox}[1][]{%
+    colback=codebg, colframe=darkblue!70!black,
+    fonttitle=\bfseries\itshape, title={#1},
+    arc=1.5mm, boxrule=0.6pt, left=4pt, right=4pt
+}
+
+\newtcolorbox{pseudocodebox}[1][]{%
+    colback=codebg, colframe=black!60,
+    fonttitle=\bfseries\ttfamily, title={#1},
+    arc=1mm, boxrule=0.8pt, left=6pt, right=6pt,
+    fontupper=\small\ttfamily
+}
+
+\newtcolorbox{dataformatbox}[1][]{%
+    enhanced, colback=blue!3, colframe=regenblue!80!black,
+    fonttitle=\bfseries, title={#1},
+    arc=2mm, boxrule=0.8pt, left=4pt, right=4pt,
+    attach boxed title to top left={xshift=6mm, yshift=-2mm},
+    boxed title style={colback=regenblue!80!black, colframe=regenblue}
+}
+
+% =====================================================
+% LISTINGS (Code)
+% =====================================================
+\usepackage{listings}
+
+\lstset{
+  frame=tb,
+  basicstyle=\small\ttfamily,
+  keywordstyle=\color{blue}\bfseries,
+  commentstyle=\color{green!50!black}\itshape,
+  stringstyle=\color{mauve},
+  breaklines=true,
+  backgroundcolor=\color{codebg}
+}
+
+% =====================================================
+% ALGORITHMS
+% =====================================================
+\usepackage[ruled,linesnumbered,vlined]{algorithm2e}
+
+% =====================================================
+% HYPERLINKS
+% =====================================================
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=black,
+    citecolor=black,
+    urlcolor=black
+}
+
+% =====================================================
+% CENTER TOC / LOF / LOT TITLES
+% =====================================================
+\renewcommand{\cfttoctitlefont}{\hfill\Large\bfseries}
+\renewcommand{\cftaftertoctitle}{\hfill}
+\renewcommand{\cftloftitlefont}{\hfill\Large\bfseries}
+\renewcommand{\cftafterloftitle}{\hfill}
+\renewcommand{\cftlottitlefont}{\hfill\Large\bfseries}
+\renewcommand{\cftafterlottitle}{\hfill}
+
+% =====================================================
+% LIST OF FIGURES FORMAT
+% =====================================================
+\renewcommand{\cftfigpresnum}{Fig.\ }
+\renewcommand{\cftfignumwidth}{2cm}
+
+% =====================================================
+% LIST OF TABLES FORMAT
+% =====================================================
+\renewcommand{\cfttabpresnum}{Table\ }
+\renewcommand{\cfttabnumwidth}{2cm}
+
+% =====================================================
+% FOOTER STYLE
+% =====================================================
+\usepackage{fancyhdr}
+
+\fancypagestyle{thesis}{
+    \fancyhf{}
+    \renewcommand{\headrulewidth}{0pt}
+    \renewcommand{\footrulewidth}{0.7pt}
+    \fancyfoot[L]{\nouppercase{\leftmark}}
+    \fancyfoot[R]{\thepage}
+}
+
+\fancypagestyle{front}{
+    \fancyhf{}
+    \renewcommand{\headrulewidth}{0pt}
+    \renewcommand{\footrulewidth}{0.7pt}
+    \fancyfoot[C]{\thepage}
+}
+
+\renewcommand{\chaptermark}[1]{%
+    \markboth{Chapter \thechapter.\ #1}{}
+}
+
+% =====================================================
+% DOCUMENT START
+% =====================================================
+\begin{document}
+
+% =====================================================
+% FRONT MATTER
+% =====================================================
+\pagestyle{front}
+\fancypagestyle{plain}{
+    \fancyhf{}
+    \renewcommand{\headrulewidth}{0pt}
+    \renewcommand{\footrulewidth}{0.7pt}
+    \fancyfoot[C]{\thepage}
+}
+
+\pagenumbering{roman}
+\onehalfspacing
+
+\input{title-page}
+\input{Declaration}
+\input{Dedication}
+\input{SupervisorApproval}
+\input{Acknowledgement}
+\input{Abstract}
+
+\clearpage
+\tableofcontents
+
+\clearpage
+\listoffigures
+
+\clearpage
+\listoftables
+
+\clearpage
+\input{nomenclature}
+
+% =====================================================
+% MAIN CONTENT
+% =====================================================
+\clearpage
+
+\fancypagestyle{plain}{
+    \fancyhf{}
+    \renewcommand{\headrulewidth}{0pt}
+    \renewcommand{\footrulewidth}{0.7pt}
+    \fancyfoot[L]{\nouppercase{\leftmark}}
+    \fancyfoot[R]{\thepage}
+}
+
+\pagestyle{thesis}
+\pagenumbering{arabic}
+\onehalfspacing
+
+\include{Chapter-1}
+\include{Chapter-2}
+\include{Chapter-3}
+\include{Chapter-4}
+\include{Chapter-5}
+\include{Chapter-6}
+\include{Chapter-7}
+\include{Chapter-8}
+\include{Chapter-9}
+\include{Chapter-10}
+\include{Chapter-11}
+
+% =====================================================
+% REFERENCES
+% =====================================================
+\clearpage
+\singlespacing
+\bibliographystyle{IEEEtran}
+\bibliography{ref}
+
+% =====================================================
+% APPENDIX
+% =====================================================
+\clearpage
+\input{appendix}
+
+\end{document}

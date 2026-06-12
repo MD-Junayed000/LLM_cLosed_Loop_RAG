@@ -1,0 +1,74 @@
+\clearpage
+\setcounter{secnumdepth}{-1}
+\section{\hfil Nomenclature \hfil}
+\vspace{1cm}
+\thispagestyle{front}
+
+\noindent \textbf{Symbols}
+
+\vspace{0.5cm}
+
+\begin{tabular}{@{}l p{11cm}@{}}
+$L$                         & Total number of decoder layers \\
+$\ell^*$                    & Selected hook layer ($\approx L/2$) \\
+$\mathbf{h}_\ell$           & Hidden state at layer $\ell$ (post-attention) \\
+$\mathbf{h}_{\text{out}}^{(\ell)}$ & Block output at layer $\ell$ (CEV source) \\
+$\mathbf{z}_{\text{CEV}}^{(\ell)}$ & Contextualized Embedding Vector at layer $\ell$ \\
+$\mathbf{z}_{\text{IAV}}^{(\ell)}$ & Intermediate Activation Vector at layer $\ell$ \\
+$\boldsymbol{\phi}(\mathbf{x})$ & CEV feature vector (single mid-depth layer) \\
+$\boldsymbol{\psi}(\mathbf{x})$ & IAV feature vector (single mid-depth layer) \\
+$p_{\text{CEV}}$            & CEV probe hallucination probability \\
+$p_{\text{IAV}}$            & IAV probe hallucination probability \\
+$p_{\text{fused}}$          & Fused hallucination-risk probability \\
+$w$                         & Fusion weight for CEV branch \\
+$T$                         & Temperature scaling parameter \\
+$\theta_{\text{hallu}}$     & Intervention threshold \\
+$\theta_{\text{abs}}$       & Abstention threshold \\
+$\theta_{\text{ret}}$       & Retrieval-quality threshold \\
+$q_{\text{ret}}$            & Retrieval-quality score \\
+$W_{\text{gate}}$, $W_{\text{up}}$, $W_{\text{down}}$ & SwiGLU FFN weight matrices \\
+$\odot$                     & Element-wise (Hadamard) product \\
+\end{tabular}
+
+\vspace{0.8cm}
+
+\newpage
+\noindent \textbf{Acronyms and Abbreviations}
+
+\vspace{0.5cm}
+
+\begin{tabular}{@{}l l@{}}
+RAG     & Retrieval-Augmented Generation \\
+CEV     & Contextualized Embedding Vector \\
+IAV     & Intermediate Activation Vector \\
+LLM     & Large Language Model \\
+MLP     & Multi-Layer Perceptron \\
+FFN     & Feed-Forward Network \\
+AUROC   & Area Under the Receiver Operating Characteristic Curve \\
+NLL     & Negative Log-Likelihood \\
+OOD     & Out-of-Distribution \\
+FAISS   & Facebook AI Similarity Search \\
+BGE     & BAAI General Embedding \\
+FP16    & Half-Precision Floating Point \\
+VRAM    & Video Random Access Memory \\
+SwiGLU  & Swish-Gated Linear Unit \\
+RMSNorm & Root Mean Square Normalization \\
+MHA     & Multi-Head Attention \\
+\end{tabular}
+
+\vspace{0.8cm}
+
+\noindent \textbf{Glossary of Terms}
+
+\vspace{0.5cm}
+
+\begin{tabular}{@{}l p{10cm}@{}}
+Hallucination       & Generation of factually unsupported or source-contradictory content \\
+Closed-loop control & Feedback-based system where detection outputs influence system actions \\
+Forward hook        & PyTorch callback that captures intermediate tensors without modifying computation \\
+Residual stream     & The additive pathway through transformer decoder blocks \\
+Polarity inversion  & A probe that separates classes strongly but in the opposite label direction under distribution shift \\
+Probe calibration   & Adjusting probe outputs so that predicted probabilities match empirical frequencies \\
+\end{tabular}
+
+\setcounter{secnumdepth}{3}

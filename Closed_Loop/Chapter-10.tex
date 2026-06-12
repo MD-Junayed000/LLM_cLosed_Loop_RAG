@@ -1,0 +1,58 @@
+\chapter{Conclusion}
+\label{ch:conclusion}
+
+This work introduced a closed-loop Retrieval-Augmented Generation framework that connects internal-state hallucination detection with inference-time correction. Rather than using a detector only to score generated responses after the fact, the proposed system feeds a calibrated hallucination-risk probability back into the RAG pipeline, allowing the system to accept, regenerate, re-retrieve, or abstain before delivering a final response.
+\vspace{0.3cm}
+
+The main technical contribution is a dual-signal probing architecture based on \textbf{Contextualized Embedding Vectors (CEV)} and \textbf{Intermediate Activation Values (IAV)}. CEV features are extracted from the decoder residual stream and capture context-integration behavior, while IAV features are extracted from the SwiGLU feed-forward intermediate activation and capture FFN activation patterns associated with parametric-memory contribution. These signals are collected from three proportional decoder depths and scored using lightweight MLP probes trained on RAG hallucination labels.
+\vspace{0.3cm}
+Across three open-weight decoder backbones, the fused CEV/IAV probe achieves strong RAGTruth validation performance: \textbf{0.8515 AUROC} for Mistral-7B, \textbf{0.8798} AUROC for Qwen3-8B, and \textbf{0.8665 AUROC} for LLaMA-3-8B-Instruct. These results show that internal activations contain useful hallucination-relevant information across multiple decoder families. However, the results should be interpreted as validation-split findings rather than official RAGTruth test-set leaderboard results.
+\vspace{0.3cm}
+The closed-loop evaluation demonstrates that internal hallucination scores can be used not only for detection, but also for controlling system behavior. The controller reduces delivered hallucination risk across all three backbones, but the safety–utility trade-off differs substantially. Mistral-7B achieves the largest hallucination reduction but abstains too frequently. LLaMA-3-8B-Instruct provides strong safety but lower answer utility. Qwen3-8B provides the best overall balance, combining the highest fused validation AUROC, strongest aligned HaluEval transfer, and highest answer acceptance rate.
+The HaluEval analysis further shows that probe transfer is distribution-dependent. Qwen3-8B and LLaMA-3-8B-Instruct preserve aligned out-of-domain discrimination, while Mistral-7B shows strong polarity inversion. This finding has an important caveat for deployment: internal-state probes should be validated (or recalibrated) before applying them to new domains, prompt formats, or benchmark distributions.
+\vspace{0.3cm}
+Overall, the results support the central claim that internal activation signals can be used to close the gap between hallucination detection and hallucination mitigation in RAG systems. \textbf{\textit{To the best of our knowledge, this work is among the first to connect internal-state hallucination probing with a multi-action closed-loop RAG controller in a frozen-backbone inference-time setting}}. The framework is architecturally reusable across related decoder-only transformer families, but each backbone still requires its own probe training and calibration because activation distributions are model-specific.
+
+\vspace{0.5cm}
+\textbf{Future works:}  prioritize evaluation on the official RAGTruth test split, multi-seed replication across all backbones, stronger target-domain calibration, content-quality checks for omission and relevance failures, and extension to non-SwiGLU architectures to test the generality of the IAV signal beyond the evaluated model families.
+
+%% -------------------------------------------------
+\section{Architecture-Agnostic Scope}
+\label{sec:agnostic_scope}
+
+One question that naturally arises: is this framework tied to a specific model, or can it be reused?
+
+The answer is both. The \emph{design} is architecture-agnostic—the same five-step procedure applies regardless of which backbone you plug in:
+
+\begin{enumerate}
+    \item Register hooks at proportional decoder depths.
+    \item Extract CEV and IAV features.
+    \item Train lightweight MLP probes on hallucination labels.
+    \item Calibrate and fuse the probe probabilities.
+    \item Feed the fused score into the same four-action controller.
+\end{enumerate}
+
+\noindent But the \emph{weights} are not transferable. Each model has its own activation geometry, its own scale, its own tokenizer quirks, and its own FFN intermediate dimensions. You cannot train probes on Mistral and deploy them on Qwen—the activations live in different spaces. So the framework is reusable in the sense that the recipe works everywhere, but each new backbone requires its own round of probe training and threshold calibration.
+
+Table~\ref{tab:agnostic} makes this explicit.
+
+\begin{table}[!htb]
+\centering
+\caption{What stays fixed and what changes when you swap backbones.}
+\label{tab:agnostic}
+\begin{tabular}{@{}lcp{7cm}@{}}
+\toprule
+\textbf{Component} & \textbf{Shared?} & \textbf{Explanation} \\
+\midrule
+Hooking strategy    & Yes   & Same proportional-depth approach ($L/4$, $L/2$, $3L/4$) \\
+CEV/IAV concept     & Yes   & Same signals—residual stream and FFN intermediate \\
+Probe architecture  & Mostly & Same MLP structure; input dimension adapts to backbone \\
+Controller logic    & Yes   & Same four-action deterministic policy \\
+Threshold values    & No    & Must be calibrated per backbone \\
+Probe weights       & No    & Must be trained from scratch for each model \\
+Input dimensions    & No    & Depend on $d_{\text{hidden}}$ and $d_{\text{inter}}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{In plain terms:} the system is architecturally portable across related decoder-only transformer families. But portability does not mean zero-cost transfer—each deployment needs its own calibration pass. That is an honest characterization of where internal-state probing stands today, and it is a limitation worth highlighting rather than glossing over.
