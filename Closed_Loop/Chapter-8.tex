@@ -125,11 +125,11 @@ We use HaluEval as our primary out-of-distribution (OOD) test. The probes are \e
 
 \begin{dataformatbox}[HaluEval-QA Example Format]
 \small
-\textbf{Question:} ``What is the capital of Australia?''\\[3pt]
-\textbf{Correct answer:} ``The capital of Australia is Canberra, which was purpose-built as the capital in the early 20th century.''\\[3pt]
-\textbf{Hallucinated answer:} ``The capital of Australia is Sydney, the largest and most well-known city in the country, serving as both the economic and political center.''\\[3pt]
-\textbf{Evaluation:} Score both with our trained probe $\to$ compute AUROC over all 10{,}000 pairs.\\[2pt]
-\textbf{Expected:} $p_{\text{fused}}(\text{hallucinated}) > p_{\text{fused}}(\text{correct})$ if transfer is successful.
+\textbf{Domain:} Closed-domain RAG (specific knowledge base)\\[3pt]
+\textbf{Generated sentence:} ``The company was founded in Munich in 1923 by Karl Fischer.''\\[3pt]
+\textbf{Retrieved evidence:} ``The company was established in 1925 in Berlin.''\\[3pt]
+\textbf{Sentence-level label:} \textcolor{abstainred}{\textbf{Hallucinated}} --- both the founding year (1923 vs.\ 1925) and location (Munich vs.\ Berlin) contradict the source.\\[3pt]
+\textbf{Usage:} Converted to binary label; added to Mistral-only training pool when supplementary data is enabled.
 \end{dataformatbox}
 
 \subsection{HalluRAG: Mistral-Specific Supplementary Data}
@@ -141,11 +141,11 @@ We use it as optional supplementary training data \emph{only} for the Mistral-7B
 
 \begin{dataformatbox}[HalluRAG Example Format]
 \small
-\textbf{Domain:} Closed-domain RAG (specific knowledge base)\\[3pt]
-\textbf{Generated sentence:} ``The company was founded in Munich in 1923 by Karl Fischer.''\\[3pt]
-\textbf{Retrieved evidence:} ``The company was established in 1925 in Berlin.''\\[3pt]
-\textbf{Sentence-level label:} \textcolor{abstainred}{\textbf{Hallucinated}} --- both the founding year (1923 vs.\ 1925) and location (Munich vs.\ Berlin) contradict the source.\\[3pt]
-\textbf{Usage:} Converted to binary label; added to Mistral-only training pool when supplementary data is enabled.
+\textbf{Question:} ``What is the capital of Australia?''\\[3pt]
+\textbf{Correct answer:} ``The capital of Australia is Canberra, which was purpose-built as the capital in the early 20th century.''\\[3pt]
+\textbf{Hallucinated answer:} ``The capital of Australia is Sydney, the largest and most well-known city in the country, serving as both the economic and political center.''\\[3pt]
+\textbf{Evaluation:} Score both with our trained probe $\to$ compute AUROC over all 10{,}000 pairs.\\[2pt]
+\textbf{Expected:} $p_{\text{fused}}(\text{hallucinated}) > p_{\text{fused}}(\text{correct})$ if transfer is successful.
 \end{dataformatbox}
 
 %% -------------------------------------------------
