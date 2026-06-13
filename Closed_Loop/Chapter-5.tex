@@ -609,7 +609,14 @@ The key distinction worth emphasizing: REGENERATE blames the generator, while RE
 \subsection{Example Closed-Loop Trace}
 \label{sec:trace_ch7}
 
-To make the controller's behavior tangible, consider the following illustrative trace. We ask about the location of Atlantis---a query designed to invite a confident hallucination, since the premise is fictional.
+To make the controller's behavior tangible, consider the following illustrative trace. We ask about the location of Atlantis---a query designed to invite a confident hallucination, since the premise is fictional. Figure~\ref{fig:atlantis_trace} walks through what the controller does step by step.
+
+\begin{figure}[!htb]
+    \centering
+    \includegraphics[width=1.00\textwidth]{Images/Query_Trace.png}
+    \caption[Closed-loop Atlantis query trace.]{Closed-loop Atlantis query trace (illustrative). The controller first re-retrieves due to low retrieval quality, then regenerates when the evidence is better but the answer is still speculative, and finally accepts a safe, cautious response on the third attempt.}
+    \label{fig:atlantis_trace}
+\end{figure}
 
 \begin{table}[!htb]
 \centering
