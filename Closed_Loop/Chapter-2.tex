@@ -150,3 +150,82 @@ At this point a skeptical reader might ask: why should internal activations tell
 \textbf{The residual stream encodes more than just token identity.} The residual stream in the middle and later layers of a transformer has accumulated not just what tokens appeared in the input but \emph{how} the model integrated and processed those tokens. Simple classifiers trained on these hidden states have been shown to predict factuality and truthfulness with non-trivial accuracy in prior work~\cite{azaria2023saplma}. The surface text might look fine, but the internal representations might show uncertainty or inconsistency. \textbf{FFN layers are not generic nonlinearities.} Mechanistic interpretability work has found that transformer FFN layers work somewhat like key-value memories \cite{geva2021ffn}. Stored associations are triggered by input patterns and those associations influence what the model generates next. Factual knowledge can be localized and even modified within specific FFN modules~\cite{meng2022locating}. This suggests that the IAV signal, the intermediate activation before downprojection, might encode a very direct signature of what parametric knowledge the model is injecting.
 
 We do not claim that either one of the signals is a perfect hallucination detector in isolation. A less ambitious hypothesis is that CEV and IAV provide \emph{complementary evidence} . CEV measures the degree of the model's incorporation of the retrieved context. IAV represents the parametric memory contribution of the feed-forward network. The more signals agree the more certain we are that a response appears to be grounded. If one or both flags are raised, the controller can intervene.
+
+
+
+%% -------------------------------------------------
+\subsection{Illustrative CEV/IAV Examples}
+\label{sec:illustrative_examples}
+
+We illustrate these ideas with three example scenarios. These are just illustrative, the activation values shown are schematic and truncated, not literal neuron readouts. The point is to show \emph{how} the probe interprets various activation patterns, including a failure case.
+
+\subsubsection{Grounded Response}
+
+\begin{groundedbox}[$\checkmark$ Example 2.7.1: Grounded Response --- ACCEPT]
+\textbf{Query:} ``What year did the Treaty of Westphalia end the Thirty Years' War?''\\[4pt]
+\textbf{Retrieved context:} ``The Peace of Westphalia was signed in 1648 and ended the Thirty Years' War.''\\[4pt]
+\textbf{Generated response:} ``The Treaty of Westphalia ended the Thirty Years' War in 1648.''\\[4pt]
+\textbf{Expected label:} Grounded / non-hallucinated.
+\end{groundedbox}
+
+\begin{activationbox}[Illustrative Activation Pattern]
+\textit{CEV at layer~16 (4096-dim, truncated):}\\
+$\uparrow$ High positive values in ``factual recall'' dimensions\\
+$\uparrow$ Pattern consistent with context-supported generation\\[6pt]
+\textit{IAV at layer~16 (14336-dim, pre-down\_proj, truncated):}\\
+$\uparrow$ Strongly activated ``historical date'' neurons\\
+$\uparrow$ MLP injecting a well-encoded factual year---aligned with context
+\end{activationbox}
+
+\vspace{0.4em}
+\noindent Here the retrieved passage directly supports the generated answer. Both CEV and IAV show patterns consistent with faithful, context-grounded generation. The fused probe score comes out low:
+
+\noindent\textbf{Controller decision:} $p_{\text{hallucination}} = 0.33 < \theta_{\text{hallu}} = 0.62 \;\Rightarrow\;$ \textcolor{acceptgreen}{\textbf{ACCEPT}}.
+
+\subsubsection{Hallucinated Response}
+
+\begin{hallucinatedbox}[$\boldsymbol{\times}$ Example 2.7.2: Hallucinated Response --- ABSTAIN]
+\textbf{Query:} ``What is the official 2024 census population of the lost city of Atlantis?''\\[4pt]
+\textbf{Retrieved context:} ``A 2024 census of South Atlantic territories found populations across several islands.''\\[4pt]
+\textbf{Generated response:} ``According to the 2024 census, Atlantis had a population of 140,634.''\\[4pt]
+\textbf{Expected label:} Hallucinated / unsupported.
+\end{hallucinatedbox}
+
+\begin{activationbox}[Illustrative Activation Pattern]
+$\uparrow$ Weak, mixed CEV activation---no strong factual grounding signal\\
+$\uparrow$ Context was only superficially related; residual stream shows low coherence\\
+$\uparrow$ ``Census'' and ``number'' neurons partially fire in IAV\\
+$\uparrow$ But ``Atlantis'' + ``population'' triggers confabulation patterns\\
+$\uparrow$ IAV encodes something like ``fabricating a plausible number from context cues''
+\end{activationbox}
+
+\vspace{0.4em}
+\noindent The retrieved passage mentions a census and population figures---but for real places, not Atlantis. The model latches onto superficial pattern matches and confidently invents a specific number. Both the CEV (low coherence with context) and IAV (confabulation patterns) produce high risk scores:
+
+\noindent\textbf{Controller decision:} $p_{\text{hallucination}} = 0.78 \geq \theta_{\text{abs}} = 0.75 \;\Rightarrow\;$ \textcolor{abstainred}{\textbf{ABSTAIN}}.
+
+\subsubsection{Failure Case: Plausible but Unsupported Extraction}
+
+\begin{failurebox}[$\triangle$ Example 2.7.3: Failure Case --- False ACCEPT]
+\textbf{Query:} ``What did I have for breakfast yesterday?''\\[4pt]
+\textbf{Retrieved context:} ``Common breakfast foods include eggs, toast, coffee, and fruit.''\\[4pt]
+\textbf{Generated response:} ``Based on the context, you had eggs, toast, and coffee.''\\[4pt]
+\textbf{Expected label:} Hallucinated / unsupported.\\[4pt]
+\textbf{Why this is tricky:} The passage is topically related but lacks the specific personal fact. The model treats generic context as if it were supporting evidence.
+\end{failurebox}
+
+\begin{activationbox}[Illustrative Activation Pattern]
+$\uparrow$ \textbf{Nearly identical} to the factual grounding pattern!\\
+$\uparrow$ Model found relevant context (``breakfast foods'') and extracted an answer\\
+$\uparrow$ Hidden state looks like ordinary factual retrieval\\
+$\uparrow$ ``Food'' + ``list'' neurons strongly activated in IAV\\
+$\uparrow$ MLP injecting a food list---indistinguishable from answering a real factual question
+\end{activationbox}
+
+\vspace{0.4em}
+\noindent This is where the probe fails. The model \emph{is} doing something that looks exactly like grounded extraction---it found food items in the context and reported them. The problem is that ``common breakfast foods'' is not the same as ``what \emph{you} ate yesterday.'' But from the model's internal perspective, the computation is virtually identical to legitimate context-supported generation. The probe scores it as low-risk:
+
+\noindent\textbf{Controller decision:} $p_{\text{hallucination}} = 0.42 < \theta_{\text{hallu}} = 0.62 \;\Rightarrow\;$ \textcolor{abstainred}{\textbf{ACCEPT} $\boldsymbol{\times}$ (WRONG)}.
+
+\vspace{0.5em}
+We include this failure case deliberately. It illustrates an important limitation: our probe is not a perfect factuality oracle. It reads activation patterns, and when the pattern of ``plausible extraction from topically relevant context'' looks identical to ``genuine grounded retrieval,'' the probe cannot distinguish them. Recognizing this boundary is essential for understanding what the system can and cannot do.
