@@ -47,7 +47,7 @@ We want to be clear about the limitations of this effort. We know of the followi
 
 \textbf{First—validation split, not test split} The main AUROC figures are based on a stratified RAGTruth validation split, not the official test set. Published baselines may employ various splits or preprocessing so comparison is a bit apples-to-oranges. We are clear about this distinction throughout yet it is worth emphasizing.
 
-\textbf{Second—probes aren't fact-checkers.} The probes measure hallucination \emph{risk} using activation patterns. They are not prophets. When the internal state of the model looks the same as grounded generation  (see Example~4.4.3 in Section~\ref{sec:illustrative_examples}), the probe will fail to detect a confident but baseless extraction.
+\textbf{Second—probes aren't fact-checkers.} The probes measure hallucination \emph{risk} using activation patterns. They are not prophets. When the internal state of the model looks the same as grounded generation  (see Example~2.7.3 in Section~\ref{sec:illustrative_examples}), the probe will fail to detect a confident but baseless extraction.
 
 \textbf{Third--no usefulness measure.} Even a non-hallucinated response can be imprecise, overcautious, or unhelpful. That aspect of quality is not recorded in our measures.
 
@@ -169,7 +169,7 @@ LLaMA-3-8B & Best generalization; highest throughput (90\% accepted) & Smallest 
 \end{tabular}
 \end{table}
 
-\textbf{There is no single winner.} Mistral is the all-rounder. Qwen is the safety-first pick. LLaMA is the utility-first pick. The choice is a deployment decision it depends on whether your application can tolerate frequent refusals or would rather accept more residual risk for higher throughput. Section~\ref{sec:backbone_behavior} discusses these profiles in greater detail; Table~\ref{tab:cross_model} has the complete numerical comparison.
+\textbf{There is no single winner.} Mistral is the all-rounder. Qwen is the safety-first pick. LLaMA is the utility-first pick. The choice is a deployment decision it depends on whether your application can tolerate frequent refusals or would rather accept more residual risk for higher throughput. Section~\ref{sec:cross_model_summary} discusses these profiles in greater detail; Table~\ref{tab:cross_model} has the complete numerical comparison.
 
 %% -------------------------------------------------
 \subsection{Why Some Alternative Approaches Were Insufficient}
