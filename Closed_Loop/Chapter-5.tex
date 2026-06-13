@@ -1,13 +1,13 @@
-\chapter{System Architecture}
-\label{ch:system_architecture}
+\chapter{Methodology}
+\label{ch:methodology}
 
-This chapter connects the pieces together. In Section~\ref{sec:background} we already established what signals we want (CEV and IAV) and why. Here we describe how such signals are integrated into a working system one that retrieves generates probes decides and sometimes retries. The chapter narrows down from high-level overview to each functional blocks, the mathematical formalization of feature extraction, the probe architecture, and a handful of worked examples of the controller in action.
+This chapter connects the pieces together. In Section~\ref{sec:background} we already established what signals we want (CEV and IAV) and why. Here we describe how such signals are integrated into a working system one that retrieves generates probes decides and sometimes retries. The chapter narrows down from high-level overview to each functional blocks, the mathematical formalization of feature extraction, the probe architecture, probe training and calibration, cross-domain transfer analysis, and the closed-loop policy controller.
 
 %% -------------------------------------------------
 \section{Overview of the Closed-Loop RAG Pipeline}
 \label{sec:pipeline_overview}
 
-The overall picture is straightforward (see Figure~\ref{fig:system_overview}). A user query arrives in. The retriever pulls the relevant passages from an FAISS index . Frozen LLM backbone generates a candidate answer, while internal activation are silently captured by forward hooks. These activations are scored by two lightweight probes, one for CEV, one for IAV, and the resulting calibrated probabilities are combined into one hallucination risk estimate. Finally, a rule-based controller receives that estimate plus a retrieval-quality score, and then determines what to do: deliver the answer, retry, fetch better evidence, or politely decline.
+The overall picture is straightforward (see Figure~\ref{fig:system_overview}). A user query arrives in. The retriever pulls the relevant passages from an FAISS index . Frozen LLM backbone generates a candidate answer, while internal activation are silently captured by forward hooks. These activations are scored by two lightweight probes, one for CEV, one for IAV, and the resulting calibrated probabilities are combined into one hallucination risk estimate. Finally, a rule-based controller receives that estimate plus a retrieval-quality score, and then determines what to do: deliver the answer, retry, fetch better evidence, or politely decline.
 
 \begin{figure}[!htb]
     \centering
@@ -27,7 +27,7 @@ The system is divided into four major blocks. Let's take them one at a time.
 
 We use a standard dense-retrieval setup \cite{karpukhin2020dpr}. We embed documents with the BAAI/bge-base-en-v1.5 embedding model~\cite{xiao2023bge}, which outputs 768-dimensional vectors. These are indexed using FAISS \cite{johnson2019faiss}. At query time, we encode the user query with the same embedding model and retrieve the top-k similar passages.
 
-We also compute a retrieval quality score – simply defined, how good a match did we get?
+We also compute a retrieval quality score -- simply defined, how good a match did we get?
 
 \begin{equation}
     q_{\text{ret}} = \frac{1}{k} \sum_{i=1}^{k} \text{sim}(\mathbf{q},\, \mathbf{d}_i)
@@ -75,7 +75,7 @@ We choose the weight $w$ on the validation split that maximizes AUROC. Interesti
 \subsection{Closed-Loop Policy Controller}
 \label{subsec:controller_overview}
 
-The controller makes the decisions. It takes as input $p_{\text{fused}}$, the retrieval quality score $q_{\text{ret}}$, and the current retry count. It selects one of four actions: accept, regenerate, re-retrieve, and abstain. The full decision logic is described in Chapter~\ref{ch:controller} (Section~\ref{sec:controller_logic}), but Table~\ref{tab:system_components} gives an overview of the connectivity of all components.
+The controller makes the decisions. It takes as input $p_{\text{fused}}$, the retrieval quality score $q_{\text{ret}}$, and the current retry count. It selects one of four actions: accept, regenerate, re-retrieve, and abstain. The full decision logic is described in Section~\ref{sec:controller_logic}, but Table~\ref{tab:system_components} gives an overview of the connectivity of all components.
 
 \begin{table}[!htb]
 \centering
@@ -139,7 +139,7 @@ Now for the math. Let $L$ be the total layer count. We pick our hook layer at:
     \label{eq:iav_extract}
 \end{equation}
 
-Since we are working with autoregressive models, we use the \emph{last token's} representation—it is the only position that has attended to the complete preceding context and generated text:
+Since we are working with autoregressive models, we use the \emph{last token's} representation---it is the only position that has attended to the complete preceding context and generated text:
 
 \begin{align}
     \boldsymbol{\phi}(\mathbf{x}) &= \mathbf{z}_{\text{CEV,last}}^{(\ell^*)} \label{eq:phi}\\[3pt]
@@ -168,7 +168,7 @@ Qwen3-8B                  & 36 & 18 & 4096 & 12288 & 4096 & 12288 \\
 
 Before settling on a single layer, we had to answer a fundamental design question: \emph{does concatenating features from multiple depths actually help, or does it just triple the probe size without meaningful gain?}
 
-An earlier version of the system fed features from three proportional depths—$L/4$, $L/2$, and $3L/4$ into the probe as a concatenated input. We did a controlled ablation across all three backbones to see if that extra width was earning its keep. The story is in Table~\ref{tab:layer_ablation}.
+An earlier version of the system fed features from three proportional depths---$L/4$, $L/2$, and $3L/4$ into the probe as a concatenated input. We did a controlled ablation across all three backbones to see if that extra width was earning its keep. The story is in Table~\ref{tab:layer_ablation}.
 
 \begin{table}[!htb]
 \centering
@@ -215,7 +215,7 @@ Figures~\ref{fig:layerwise_single}--\ref{fig:layerwise_heatmap} visualize this c
     \label{fig:layerwise_heatmap}
 \end{figure}
 
-\textbf{Our decision:} read CEV and IAV from a single mid-depth layer at $L/2$. That means layer~16 for the 32-layer Mistral and LLaMA, and layer~18 for the 36-layer Qwen. The three-layer configuration is officially retired—though we compare training dynamics and out-of-domain transfer against it one more time in Section~\ref{sec:triple_comparison}, just to be thorough.
+\textbf{Our decision:} read CEV and IAV from a single mid-depth layer at $L/2$. That means layer~16 for the 32-layer Mistral and LLaMA, and layer~18 for the 36-layer Qwen. The three-layer configuration is officially retired---though we compare training dynamics and out-of-domain transfer against it one more time in Section~\ref{sec:triple_comparison}, just to be thorough.
 
 \newpage
 %% -------------------------------------------------
@@ -279,9 +279,7 @@ Full training details (optimizer settings, learning rates, early stopping, etc.)
 \section{Controller Policy}
 \label{sec:controller_policy_ch5}
 
-The controller picks one of four actions based on the fused score, retrieval quality, and retry count. We defer the full decision rule to Section~\ref{sec:controller_logic} in Chapter~\ref{ch:controller}, but the per-backbone thresholds are summarized here for reference.
-
-
+The controller picks one of four actions based on the fused score, retrieval quality, and retry count. The per-backbone thresholds are summarized here for reference.
 
 \begin{table}[!htb]
 \centering
@@ -354,3 +352,313 @@ Figure~\ref{fig:detailed_methodology} zooms into the probing and fusion machiner
     \caption[Detailed methodology for internal-state probing, calibration, and fusion.]{Detailed methodology for internal-state probing, temperature calibration, and probability-level fusion. Panel~A covers activation extraction; Panel~B covers probe scoring, calibration, fusion, and controller handoff.}
     \label{fig:detailed_methodology}
 \end{figure}
+
+%% =================================================
+%% PROBE TRAINING, CALIBRATION, AND CROSS-DOMAIN TRANSFER
+%% =================================================
+\newpage
+\section{Probe Training, Calibration, and Cross-Domain Transfer}
+\label{sec:probe_training}
+
+Having described the architecture, we now turn to how the probes are actually trained, how we ensure their outputs are well-calibrated, and critically whether the learned signals hold up when tested on data the probes have never seen before.
+
+%% -------------------------------------------------
+\subsection{Probe Architecture and Training Protocol}
+\label{sec:training_protocol}
+
+For each backbone, we train two distinct MLP probes, one taking the CEV feature vector $\boldsymbol{\phi}(\mathbf{x})$ and one taking the IAV feature vector $\boldsymbol{\psi}(\mathbf{x})$. Both employ the same two-hidden-layer architecture as explained in Section~\ref{sec:probe_arch} (Table~\ref{tab:probe_architecture}) but use different input dimensions as CEV and IAV originate from separate representational spaces.
+
+The labeling convention is straightforward: $y = 0$ signifies that the response is grounded (supported by the retrieved context), while $y = 1$ means that it is hallucinated. After training converges, we convert the raw logits into calibrated probabilities via temperature scaling, a very important step when the downstream controller makes decisions based on absolute probability values instead of just ranks.
+
+Table~\ref{tab:training_config} provides a summary of the complete training procedure.
+
+\begin{table}[!htb]
+\centering
+\caption{Probe training configuration.}
+\label{tab:training_config}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Parameter} & \textbf{Setting} \\
+\midrule
+Probe type              & Two independent MLP probes: CEV and IAV \\
+Optimizer               & AdamW \\
+Learning rate           & Mistral: $3 \times 10^{-4}$;\; LLaMA/Qwen: $1 \times 10^{-3}$ \\
+Scheduler               & CosineAnnealingLR \\
+Minimum learning rate   & $1 \times 10^{-6}$ \\
+Loss function           & Class-weighted cross-entropy \\
+Label smoothing         & $\varepsilon = 0.05$ \\
+Maximum epochs          & 40 \\
+Early stopping criterion & Validation AUROC \\
+Early-stopping patience & 10 epochs \\
+Validation split        & Stratified 80/20 from RAGTruth training data \\
+Checkpoint selection    & Best validation AUROC \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Why these choices? The class weighting corrects for label imbalance, the label smoothing prevents overconfident predictions (which would impair calibration), and the per-backbone learning rates reflect empirical tuning. Mistral's activations turned out to be more format-sensitive and needed a gentler optimizer step. The whole reasoning is detailed in Section~\ref{sec:probe_training_details}.
+
+%% -------------------------------------------------
+\subsection{Training Dynamics and HaluEval Transfer}
+\label{sec:training_dynamics}
+
+Figure~\ref{fig:training_halueval} illustrates two narratives. The first row displays training progress on RAGTruth validation split, our in-domain sanity check. The bottom row addresses a harder question: do these probes still work when applied to HaluEval, an entirely new hallucination benchmark for which they were never trained?
+
+\begin{figure}[!htb]
+    \centering
+    \includegraphics[width=1.05\textwidth]{Images/compare_training_and_halueval_grid.png}
+    \caption[Probe training dynamics and HaluEval cross-domain ROC curves.]{Top: in-domain training loss and validation AUROC for all three backbones. Bottom row: Out-of-domain ROC curves of CEV, IAV and fused scores for HaluEval.}
+    \label{fig:training_halueval}
+\end{figure}
+
+\newpage
+\subsubsection{In-Domain Training Behavior}
+\label{sec:indomain_training}
+
+Training is well-behaved across the board. CEV and IAV probe loss curves drop smoothly throughout all three backbones; no instability, no unexpected collapses. Validation AUROC increases then plateaus which tells us the probes are learning real patterns instead of memorizing training instances.
+
+And it is especially intriguing because the dual-signal architecture is empirically valid. Although IAV is usually the strongest individual branch, CEV is seldom far behind and definitely adds additional information. This motivates our approach of training two separate probes and combining their outputs, rather than using a single source of signal.
+
+\subsubsection{HaluEval Cross-Domain Transfer}
+\label{sec:halueval_transfer}
+
+The bottom row of Figure~\ref{fig:training_halueval} shows an interesting case.
+
+For LLaMA-3-8B-Instruct and Qwen3-8B, transfer works as expected. The raw AUROC scores are greater than 0.5, indicating that the probes trained on RAGTruth still give larger hallucination scores to the hallucinated HaluEval responses than to the right ones. The signal is generalizable.
+
+Mistral-7B-Instruct-v0.2 is a different narrative Its raw AUROC values are well \emph{below} 0.5, on the order of 0.105. At first sight this appears like a complete failure. But look a little closer, an AUROC of 0.105 is not random (that would be 0.5). It means that the probe is separating the classes \emph{really well} in the opposite direction. The adjustment $1 - 0.105 = 0.895$ shows that the discriminative power is actually excellent, simply the polarity flipped under distribution shift.
+
+The complete numerical breakdown is available in Table~\ref{tab:halueval_ood} (Section~\ref{sec:halueval_ood}). 
+
+\subsubsection{Interpretation of Mistral Polarity Inversion}
+\label{sec:polarity_inversion}
+
+It is appropriate to interpret this polarity inversion that it is \emph{not} a code bug and if it was random noise, the AUROC would be around 0.5, not plummet to 0.105. And this is not because we utilize a base model instead of an instruction tuned one; we expressly use the fully tuned Mistral-7B-Instruct-v0.2 checkpoint.
+
+What seems to be happening is that Mistral's internal representations encode hallucination-relevant information in a fashion that is directionally particular to the training distribution. When the distribution changes (from RAGTruth to HaluEval) the \emph{meaning} of some activation patterns flips. The signal is strong yet its sign is inverted.
+
+The practical message is sobering, but important: \emph{you cannot trust that an internal-state probe will carry over automatically to a different domain, benchmark, or prompt format.} Before being applied in a new situation, the probe should be validated and potentially re-calibrated on representative instances from the target distribution.
+
+\subsubsection{Comparison with the Triple-Layer Configuration}
+\label{sec:triple_comparison}
+
+One might question whether our single mid-layer approach is better than a three-layer concatenation at dealing with distribution shift; perhaps the additional depth diversity can be useful for generalization? We examined. It does not. 
+\begin{figure}[!htb]
+    \centering
+    \includegraphics[width=1.00\textwidth]{Images/triple_compare_training_and_halueval_grid.png}
+    \caption[Triple layer Probe training dynamics and HaluEval cross-domain ROC curves.]{Per-backbone HaluEval ROC for the three-depth (triple) concatenation. }
+    \label{fig:Triple layer training_halueval}
+\end{figure}
+
+The triple configuration yields almost the same training curves and HaluEval ROC behavior. Mistral still has a polarity switch. LLaMA and Qwen still have aligned transfer. No metric improves significantly beyond the single mid-depth result. The extra arguments purchase nothing, further validating the layer-selection conclusion of Section~\ref{sec:layer_selection}.
+
+%% -------------------------------------------------
+\newpage
+\subsection{Post-Training Calibration and Fusion}
+\label{sec:calibration_fusion}
+
+Once training is complete, we calibrate each probe independently using temperature scaling:
+\begin{equation}
+    P(y = 1) = \text{softmax}\!\left(\frac{\mathbf{z}}{T}\right)
+\end{equation}
+
+\noindent  The temperature $T$ is learned via minimization of validation negative log-likelihood. Why do we have to do this anyway? Since the controller makes decisions based on thresholds. If the probe gives 0.65 when it should be 0.45, the controller will overcontrol. Calibration ensures that the probability values \emph{actually mean what they do}.
+
+We calibrate CEV and IAV separately because the two probes can have quite different confidence profiles. One might be well-ranked but systematically overconfident; the other might be better calibrated but with weaker discrimination. Temperature scaling brings them onto a common scale before fusion.
+
+After calibration, the two probabilities are combined:
+\[
+    p_{\text{fused}} = w \cdot p_{\text{CEV}} + (1 - w) \cdot p_{\text{IAV}}
+\]
+
+\noindent with $w$ selected by grid search on the validation split to maximize AUROC. Importantly, this fusion happens at the \emph{probability} level---not by concatenating raw activation vectors into a bigger classifier. Each probe keeps its own learned decision boundary; we combine their judgments, not their inputs.
+
+\begin{table}[!htb]
+\centering
+\caption{Calibration and fusion settings.}
+\label{tab:calibration_settings}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Component} & \textbf{Setting} \\
+\midrule
+Calibration method        & Temperature scaling \\
+Calibration scope         & Applied separately to CEV and IAV probes \\
+Calibration objective     & Minimize validation NLL \\
+Fusion type               & Probability-level convex fusion \\
+Fusion formula            & $p_{\text{fused}} = w \cdot p_{\text{CEV}} + (1-w) \cdot p_{\text{IAV}}$ \\
+Fusion weight selection   & Validation-set grid search \\
+Fusion objective          & Maximize validation AUROC \\
+Controller input          & $p_{\text{fused}}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%% -------------------------------------------------
+\newpage
+\subsection{Probe Training Summary}
+\label{sec:ch6_summary}
+
+What have we learned in this section? Three things stand out.
+
+First, the probes train stably and learn true hallucination-relevant patterns on RAGTruth both CEV and IAV converge smoothly, and validation metrics confirm generalization to the held-out split.
+
+Second, the out-of-domain transfer is real but model dependent. Qwen3-8B and LLaMA-3-8B-Instruct still perform well in their discriminative manner on HaluEval. Mistral-7B-Instruct-v0.2 is still very discriminative, but the polarity is reversed, an interesting result showing how sensitive these probes can be to the distribution.
+
+Third, calibration is not an option. The downstream controller makes absolute threshold decisions, so the probes need to produce probabilities associated with empirical risk levels. This is achieved with temperature scaling and probability-level fusion, which keeps the two signals separate but combines their strengths.
+
+The bottom line is that internal-state probes are effective, but they are not plug-and-play across domains. Deploy with confidence. Validate first.
+
+%% =================================================
+%% CLOSED-LOOP POLICY CONTROLLER
+%% =================================================
+\newpage
+\section{Closed-Loop Policy Controller}
+\label{sec:controller}
+
+Up to this point, we have a system that can detect hallucination risk but detecting is not the same as \emph{doing something about it}. This section is about the ``doing'' part. We describe how the fused hallucination probability gets turned into an actual operational decision: should the response go to the user, should the system try again, or should it just say ``I don't know''?
+
+%% -------------------------------------------------
+\subsection{Purpose of the Controller}
+\label{sec:controller_purpose}
+
+The preceding sections built up a detection pipeline: extract CEV and IAV features, score them with calibrated probes, fuse the results into $p_{\text{fused}}$. But a number on its own does not help the user. What matters is what the system \emph{does} with that number.
+
+That is the controller's job. It takes the hallucination-risk estimate and converts it into an inference-time action. Not a label, not a flag in a log file---an action that changes what happens next in the pipeline.
+
+The controller receives three inputs:
+\begin{itemize}
+    \item $p_{\text{fused}}$---the calibrated fused hallucination-risk probability
+    \item $q_{\text{ret}}$---the retrieval-quality score, computed as the mean similarity of the top-$k$ retrieved passages
+    \item $r$---the current retry count (how many times we have already looped)
+\end{itemize}
+
+And it picks one of four actions:
+\[
+    \mathcal{A} = \{\textsc{Accept},\; \textsc{Regenerate},\; \textsc{Re-Retrieve},\; \textsc{Abstain}\}
+\]
+
+%% -------------------------------------------------
+\subsection{Controller Inputs and Thresholds}
+\label{sec:controller_inputs}
+
+Three thresholds govern the controller's behavior. Each one answers a different question.
+
+\begin{table}[!htb]
+\centering
+\caption{Controller threshold symbols and their roles.}
+\label{tab:threshold_symbols}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Question It Answers} \\
+\midrule
+$\theta_{\text{hallu}}$ & Intervention threshold & Is the response safe enough to deliver? \\
+$\theta_{\text{abs}}$   & Abstention threshold  & Is the response so risky we should give up? \\
+$\theta_{\text{ret}}$   & Retrieval-quality threshold & Was the retrieved evidence good enough? \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Two of these are fixed across all backbones in our experiments: $\theta_{\text{ret}} = 0.30$ and $\text{MAX\_RETRIES} = 3$. The hallucination and abstention thresholds vary per backbone because each model's activation distribution produces different probe-score ranges (see Table~\ref{tab:controller_config}).
+
+%% -------------------------------------------------
+\subsection{Controller Decision Logic}
+\label{sec:controller_logic}
+
+The policy is entirely deterministic---no learned weights, no stochastic sampling, no neural network in the loop. Given $p_{\text{fused}}$, $q_{\text{ret}}$, and retry count $r$, the controller follows this rule:
+
+\begin{equation}
+\text{Action} = 
+\begin{cases}
+    \textsc{Abstain}      & \text{if } r \geq \text{MAX\_RETRIES} \\[4pt]
+    \textsc{Accept}       & \text{if } p_{\text{fused}} < \theta_{\text{hallu}} \\[4pt]
+    \textsc{Abstain}      & \text{if } p_{\text{fused}} \geq \theta_{\text{abs}} \\[4pt]
+    \textsc{Re-Retrieve}  & \text{if } \theta_{\text{hallu}} \leq p_{\text{fused}} < \theta_{\text{abs}} \;\wedge\; q_{\text{ret}} < \theta_{\text{ret}} \\[4pt]
+    \textsc{Regenerate}   & \text{if } \theta_{\text{hallu}} \leq p_{\text{fused}} < \theta_{\text{abs}} \;\wedge\; q_{\text{ret}} \geq \theta_{\text{ret}}
+\end{cases}
+\label{eq:controller_rule}
+\end{equation}
+
+The logic is read top to bottom---first check wins. The interesting part is what happens in the middle zone, when the risk is elevated but not extreme. There, the controller asks a follow-up question: \emph{was the retrieval any good?} If the evidence looks weak ($q_{\text{ret}}$ below threshold), the problem is probably upstream bad retrieval so the system fetches new evidence. If the evidence was fine but the answer is still risky, the problem is likely in generation itself, so the system regenerates with the same context.
+
+%% -------------------------------------------------
+\subsection{Semantic Meaning of Each Controller Action}
+\label{sec:action_semantics}
+
+Each action carries a distinct meaning about where the system thinks the problem lies.
+
+\begin{table}[!htb]
+\centering
+\caption{What each action means and what the system does.}
+\label{tab:action_semantics}
+\small
+\begin{tabular}{@{}l p{3cm} p{4cm} p{4cm}@{}}
+\toprule
+\textbf{Action} & \textbf{When It Fires} & \textbf{What It Means} & \textbf{What Happens} \\
+\midrule
+\textbf{ACCEPT} & $p_{\text{fused}} < \theta_{\text{hallu}}$ & ``Looks safe'' & Deliver the response to the user \\[4pt]
+\textbf{REGENERATE} & Moderate risk, good retrieval & ``Evidence is fine, generation isn't'' & Generate a new answer using same context \\[4pt]
+\textbf{RE-RETRIEVE} & Moderate risk, weak retrieval & ``The evidence was the problem'' & Fetch better passages, then try again \\[4pt]
+\textbf{ABSTAIN} & Very high risk or out of retries & ``Can't safely answer this'' & Return a polite refusal \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The key distinction worth emphasizing: REGENERATE blames the generator, while RE-RETRIEVE blames the retriever. This separation lets the system target its corrective effort where it is most likely to help.
+
+%% -------------------------------------------------
+\subsection{Example Closed-Loop Trace}
+\label{sec:trace_ch7}
+
+To make the controller's behavior tangible, consider the following illustrative trace. We ask about the location of Atlantis---a query designed to invite a confident hallucination, since the premise is fictional.
+
+\begin{table}[!htb]
+\centering
+\caption{Atlantis closed-loop trace (illustrative, not a logged run).}
+\label{tab:atlantis_trace}
+\footnotesize
+\renewcommand{\arraystretch}{1.35}
+\setlength{\tabcolsep}{3.5pt}
+
+\begin{tabularx}{\textwidth}{@{}c p{2.0cm} X c p{1.3cm} p{1.8cm} X@{}}
+\toprule
+\textbf{Iter.} & \textbf{Retrieved} & \textbf{Response} & $p_{\text{fused}}$ & \textbf{Risk} & \textbf{Decision} & \textbf{Outcome} \\
+\midrule
+
+1 & Mythological descriptions 
+& ``Atlantis is in the Mediterranean Sea\ldots'' 
+& 0.71 
+& Elevated 
+& RE-RETRIEVE 
+& Fetch better evidence \\
+
+2 & Historical discussion 
+& ``Some texts place it in the Atlantic\ldots'' 
+& 0.69 
+& Moderate 
+& REGENERATE 
+& Try again using the same evidence \\
+
+3 & Refined context 
+& ``Atlantis is mythological; I cannot verify\ldots'' 
+& 0.22 
+& Low 
+& ACCEPT 
+& Deliver safe response \\
+
+\bottomrule
+\end{tabularx}
+\end{table}
+
+A few things to notice here. First, the controller did not simply refuse on the first attempt---it tried to recover. The first response was risky \emph{and} the retrieval quality was poor, so it fetched new evidence. The second time, retrieval was better but the generation was still speculative, so it regenerated. Only on the third try did the model produce something safe enough to deliver.
+
+Second, the final accepted answer is itself a kind of refusal (``Atlantis is mythological; I cannot verify a single factual location''). But from the controller's perspective, this is not an ABSTAIN---it is an ACCEPT of a response that happens to be cautious. The system accepted a low-risk output; it did not withhold a response. There is an important semantic distinction there.
+
+\textbf{Note on the real-time executions.} This trace is an illustration, built to depict the complete recovery process. In the actual nine-query demo (Section~\ref{sec:nine_query_demo}), the true Atlantis query worked in one try on all three backbones. Qwen3-8B refused outright ($p_{\text{fused}} = 0.80$), but Mistral and LLaMA both accepted the model's own in-text denial on the first try ($p_{\text{fused}} = 0.31$ and $0.10$ respectively). This multi-round recovery path shows what \emph{would} happen if the initial attempt landed in the intervention zone---it was not triggered by this particular query in practice.
+
+%% -------------------------------------------------
+\subsection{Controller Summary}
+\label{sec:ch7_summery}
+
+The controller is deliberately kept simple, a handful of threshold comparisons and an if-else chain.  That simplicity is a strength, not a weakness. This means the system is completely interpretable: given the three inputs, anyone can follow exactly why a certain action was chosen. There's no secret weights to debug, no stochastic decisions to second guess.
+
+There is a lot to be gained from the controller, despite its simple nature. This shifts hallucination detection from a passive observation (``this response might be risky'') into an active intervention (``let's try again'' or ``let's not answer''). The RAG pipeline is self-corrective at inference time, and it does so in a way that is clear enough to audit and explain.
