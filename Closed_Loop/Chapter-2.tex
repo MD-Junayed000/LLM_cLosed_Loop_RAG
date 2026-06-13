@@ -7,9 +7,9 @@ With the motivation established in Chapter~\ref{ch:introduction}, we now turn to
 \section{Problem Statement}
 \label{sec:problem_statement}
 
-RAG systems were supposed to fix the hallucination problem or at least reduce it substantially. By grounding generation in retrieved evidence, the hope was that language models would stick to what the documents actually say. In practice, though, retrieval alone does not guarantee faithfulness. A model can still hallucinate even with a perfectly relevant passage sitting in its context window.
+RAG systems were supposed to fix the hallucination problem or at least reduce it substantially. By grounding generation in retrieved evidence, the hope was that language models would stick to what the documents actually say. In practice, however, retrieval is no guarantee of faithfulness. A model can still hallucinate even with a perfectly relevant passage sitting in its context window. 
 
-Why? Because several failure modes persist. The model might lean on its parametric memory instead of the retrieved text. It might misread a passage or only partially integrate the context. It might confidently extrapolate beyond what the evidence actually supports. The result in each case is a fluent, convincing answer that happens to be factually unsupported.
+ Why? Because several failure modes remain. The model might rely on its parametric memory instead of the retrieved text. It might misread a passage or partially integrate the context. It might confidently extrapolate beyond what the evidence actually supports. The result in each case is a fluent, convincing answer that happens to be factually unsupported.
 
 The central problem we address is therefore not retrieval quality,it is the \textbf{absence of any inference-time feedback mechanism} connecting hallucination detection to corrective action. Current systems can retrieve good passages and generate polished answers, but without some internal reliability signal, they have no way to decide whether to trust what they just generated, try again, seek better evidence, or simply refuse to answer.
 
@@ -24,8 +24,11 @@ Given this framing, our objective is to design and evaluate a closed-loop RAG sy
 \begin{enumerate}
     \item \emph{Extracting internal activation features} from transformer decoder layers while the model is actively generating a response—not after the fact, but during inference.
     \item \emph{Producing a calibrated hallucination-risk probability} by combining complementary signals from the residual stream (CEV) and the feed-forward intermediate (IAV).
-    \item \emph{Acting on that probability} through a controller that decides whether a candidate response should be delivered, regenerated with the same context, supported by fresh retrieval, or withheld altogether.
-    \item \emph{Demonstrating measurable risk reduction}—showing that the closed-loop controller actually reduces the hallucination risk of delivered responses compared to vanilla single-pass RAG.
+\item \emph{Acting on that probability} with a controller that chooses whether to deliver a candidate response, re-generate it with the same context, support it with new retrieval, or withheld altogether.
+
+
+ \item \emph{Showing measurable risk reduction}—demonstrate that the closed loop controller actually reduces the hallucination risk of delivered responses over vanilla single-pass RAG.
+ 
     \item \emph{Generalizing across backbones}—testing the same framework on multiple decoder-only transformers without altering their architectures or retraining their weights.
 \end{enumerate}
 

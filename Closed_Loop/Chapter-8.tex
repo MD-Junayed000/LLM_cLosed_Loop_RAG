@@ -102,11 +102,11 @@ We convert the multi-class annotation scheme into a binary label: $y = 0$ for gr
 \subsection{SQuAD v1.1: Retrieval Corpus and Operational QA Source}
 \label{sec:squad}
 
-SQuAD v1.1~\cite{rajpurkar2016squad} is one of the most widely used reading comprehension benchmarks, containing over 100{,}000 question-answer pairs drawn from Wikipedia articles. In our pipeline, it serves a dual purpose that leverages different parts of the dataset for different functions.
+SQuAD v1.1~\cite{rajpurkar2016squad} is one of the most popular datasets for reading comprehension, featuring over 100{,}000 question-answer pairs from Wikipedia articles. It has a dual use in our workflow, exploiting various parts of the dataset for separate functionalities.
 
-\textbf{As a retrieval corpus:} We take 25{,}000 context passages from the SQuAD training set, encode them with the BGE embedding model, and index them in FAISS. This becomes the knowledge base from which our system retrieves evidence at inference time. The passages cover diverse topics: history, science, literature, geography—giving the retriever a reasonable breadth of knowledge.
+\textbf{As a retrieval corpus:} We extract 25,000 context passages from the SQuAD training set and encode them with BGE embedding model and index them in FAISS. This is the knowledge base our system uses to retrieve evidence during inference. The sections span several topics: history, physics, literature, geography, etc. giving the retriever a fair amount of knowledge. 
 
-\textbf{As an operational QA source:} The 10{,}570 validation question-answer pairs provide the queries on which we test the full closed-loop pipeline. Each query has a known reference answer, which allows us to compute token-level F1 as an optional utility check (though AUROC on the probe is our primary metric).
+\textbf{As an operational QA source:} We evaluate the whole closed-loop pipeline on the validation question-answer pairs, 10,570 in total, which are the queries. For each question, we have a known reference answer, thus we may compute token-level F1 as an optional utility check (even though AUROC on the probe is our key metric).
 
 \begin{dataformatbox}[SQuAD v1.1 Example Format]
 \small
@@ -297,12 +297,12 @@ LLaMA-3-8B-Instruct
 \section{Probe Score Distributions}
 \label{sec:score_distributions}
 
-Figure~\ref{fig:score_histograms} shows what the probe scores look like in practice. Grounded and hallucinated examples produce overlapping but distinguishable distributions—which is exactly what you would expect for a phenomenon as nuanced as hallucination. Perfect separation is unrealistic; what matters is that the overlap is small enough for useful thresholding.
+Figure~\ref{fig:score_histograms} illustrates what the probe scores look like in application.  The distributions of grounded and hallucinated samples overlap but are identifiable, as one would expect from a complicated phenomenon like hallucination. There will never be perfect separation . It only needs to be separated enough to be beneficial for threshold .
 
 \begin{figure}[!htb]
     \centering
     \includegraphics[width=1.05\textwidth]{Images/probe_score_histograms_grid.png}
-    \caption[Probe score distributions.]{Probe score distributions for grounded vs.\ hallucinated examples. Partial overlap is expected—hallucination is a graded phenomenon, not a binary one.}
+    \caption[Probe score distributions.]{Probe score distributions for grounded vs.\ hallucinated examples. Partial overlap is expected as hallucination is a graded phenomenon, not a binary one.}
     \label{fig:score_histograms}
 \end{figure}
 
@@ -348,7 +348,7 @@ SAPLMA~\cite{azaria2023saplma}                  & Hidden-state probe       & No 
 \section{Vanilla RAG vs.\ Closed-Loop RAG}
 \label{sec:vanilla_vs_cl}
 
-This is arguably the most important experiment in the thesis: does the closed loop actually \emph{help}? Table~\ref{tab:vanilla_vs_cl} compares the delivered hallucination proxy between vanilla (single-pass) RAG and our closed-loop system.
+This is perhaps the most crucial experiment in the thesis: does the closed loop actually \emph{help} In Table~\ref{tab:vanilla_vs_cl} we compare the hallucination proxy of vanilla (single-pass) RAG versus our closed-loop system.
 
 \begin{table}[!htb]
 \centering
@@ -372,9 +372,9 @@ LLaMA-3-8B  & 0.3321 & 0.1824          & 45.1\% & \textbf{90\%} & 10\% \\
     \label{fig:vanilla_vs_cl}
 \end{figure}
 
-The numbers speak clearly. Every backbone sees a meaningful reduction in delivered hallucination risk ranging from 45\% (LLaMA) to nearly 80\% (Qwen). But this comes at different costs. Qwen achieves the biggest reduction by being the most aggressive abstainer (58\% of queries refused). Mistral strikes a balance (62\% accepted, 68\% reduction). LLaMA keeps almost everything (90\% accepted) but pays for it with a smaller reduction.
+The figures indicate it overall. Each backbone obtains a substantial decrease of delivered hallucination risk, between 45% (LLaMA) and close to 80% (Qwen). But for various prices. Qwen has the largest reduction by refusing most aggressively (58\% of queries refused). Mistral finds a middle ground (62% acceptance, 68% decrease). LLaMA retains practically everything (90\% acceptable), albeit at a reduced decrease.
 
-\textbf{An important caveat.} These reductions are measured using the system's own probe score as the hallucination proxy—not human judgments. The metric is therefore partly self-referential: a controller that only accepts low-scoring responses will, by construction, report low delivered risk. Three specific limitations follow: (i) the probe cannot catch the failure mode from Section~\ref{sec:illustrative_examples}; (ii) 100 queries at one seed carries sampling noise; (iii) the RE-RETRIEVE branch was rarely triggered. We expand on these in Section~\ref{sec:limitations}.
+\textbf{A crucial caveat.} These reductions are measured using the system’s own probe score as the hallucination proxy ,not human judgements. The metric is therefore partly self-referential: a controller that only accepts low-scoring responses will, by construction, report low delivered risk. Three specific limitations follow: (i) the probe cannot catch the failure mode. (ii) 100 queries at one seed carries sampling noise; (iii) the RE-RETRIEVE branch was rarely triggered. We expand on these in Section~\ref{sec:limitations}.
 
 %% -------------------------------------------------
 \section{Ablation Study: CEV, IAV, and Fusion}
@@ -441,9 +441,9 @@ LLaMA transfers beautifully (0.814 raw AUROC). Qwen does respectably (0.699). Mi
 \section{Nine-Query Live Demonstration}
 \label{sec:nine_query_demo}
 
-To complement the aggregate statistics, we ran all three backbones on a curated set of nine queries ranging from easy factual questions to deliberately impossible ones. Unlike the RAGTruth validation and the 100-query closed-loop evaluation, this experiment is not meant to provide statistical evidence. It is a qualitative stress test: does the system behave sensibly across different query types?
+In addition to aggregate statistics, we evaluated all three backbones on a handpicked set of nine inquiries, ranging from straightforward factual questions to intentionally impossible ones. This experiment is not a statistical evidence like the RAGTruth validation and the 100-query closed-loop evaluation. It is a qualitative stress test: Does the system behave reasonably on different types of queries?
 
-The success criterion here is based on the \emph{final delivered behavior}, not only the first generated response. A query counts as successful when the system either returns a correct grounded answer (for answerable questions) or refuses safely (for unanswerable, subjective, fictional, or nonsensical ones). Importantly, an ``accept'' decision is not automatically unsafe—for Mistral and LLaMA, several accepted responses are themselves honest in-text refusals like ``the context does not contain this.''
+The success criterion here is on the \emph{final delivered behavior}, not only the initial generated answer. A query is successful if the system provides a correct grounded answer (for answerable questions) or denies securely (for unanswerable, subjective, fictional, and nonsensical inquiries). Importantly, an ``accept'' decision is not automatically unsafe—for Mistral and LLaMA, several accepted responses are themselves honest in-text refusals like ``the context does not contain this.''
 
 \begin{table}[!htb]
 \centering

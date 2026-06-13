@@ -32,7 +32,7 @@ The answer is both. The \emph{design} is architecture-agnostic—the same five-s
     \item Feed the fused score into the same four-action controller.
 \end{enumerate}
 
-\noindent But the \emph{weights} are not transferable. Each model has its own activation geometry, its own scale, its own tokenizer quirks, and its own FFN intermediate dimensions. You cannot train probes on Mistral and deploy them on Qwen—the activations live in different spaces. So the framework is reusable in the sense that the recipe works everywhere, but each new backbone requires its own round of probe training and threshold calibration.
+\noindent But the \emph{weights} can't be transfer. Each model has its own activation geometry , its own scale , its own tokenizer anomalies , its own FFN intermediate dimensions . One can't train probes on Mistral, and deploy on Qwen. The activations live in different spaces. So the framework is reusable in that the recipe works everywhere, but each new backbone needs its own round of probe training and threshold calibration.
 
 Table~\ref{tab:agnostic} makes this explicit.
 
@@ -55,4 +55,4 @@ Input dimensions    & No    & Depend on $d_{\text{hidden}}$ and $d_{\text{inter}
 \end{tabular}
 \end{table}
 
-\textbf{In plain terms:} the system is architecturally portable across related decoder-only transformer families. But portability does not mean zero-cost transfer—each deployment needs its own calibration pass. That is an honest characterization of where internal-state probing stands today, and it is a limitation worth highlighting rather than glossing over.
+\textbf{In simple words:} the system is architecturally transferable between related decoder-only transformer families . Portability, however, does not mean one can transfer at no expense, each deployment requires its own calibration pass. That is an honest representation of where internal-state probing stands now, and it is a restriction worth calling out rather than glossing-over.

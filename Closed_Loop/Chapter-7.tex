@@ -139,12 +139,12 @@ A few things to notice here. First, the controller did not simply refuse on the 
 
 Second, the final accepted answer is itself a kind of refusal (``Atlantis is mythological; I cannot verify a single factual location''). But from the controller's perspective, this is not an ABSTAIN—it is an ACCEPT of a response that happens to be cautious. The system accepted a low-risk output; it did not withhold a response. There is an important semantic distinction there.
 
-\textbf{A note on the live runs.} This trace is illustrative, constructed to show the full recovery path. In the actual nine-query demonstration (Section~\ref{sec:nine_query_demo}), the real Atlantis query resolved in a single attempt on all three backbones. Qwen3-8B abstained outright ($p_{\text{fused}} = 0.80$), while Mistral and LLaMA both accepted the model's own in-text refusal on the first try ($p_{\text{fused}} = 0.31$ and $0.10$ respectively). The multi-round recovery path shown here illustrates what \emph{would} happen if the first attempt landed in the intervention zone—it was not triggered by this particular query in practice.
+\textbf{Note on the real-time executions.} This trace is an illustration, built to depict the complete recovery process. In the actual nine-query demo (Section~\ref{sec:nine_query_demo}), the true Atlantis query worked in one try on all three backbones. Qwen3-8B refused outright ($p_{\text{fused}} = 0.80$), but Mistral and LLaMA both accepted the model's own in-text denial on the first try ($p_{\text{fused}} = 0.31$ and $0.10$ respectively). This multi-round recovery path shows what \emph{would} happen if the initial attempt landed in the intervention zone—it was not triggered by this particular query in practice.
 
 %% -------------------------------------------------
-\section{Summary}
-\label{sec:ch7_summary}
+ \section{Summary} 
+\label{sec:ch7_summery}
 
-The controller is deliberately simple, a handful of threshold comparisons and an if-else chain. That simplicity is a feature, not a limitation. It means the system is fully interpretable: given the three input values, anyone can trace exactly why a particular action was chosen. There are no hidden weights to debug, no stochastic decisions to second-guess.
+The controller is deliberately kept simple, a handful of threshold comparisons and an if-else chain.  That simplicity is a strength, not a weakness. This means the system is completely interpretable: given the three inputs, anyone can follow exactly why a certain action was chosen. There's no secret weights to debug, no stochastic decisions to second guess.
 
-What the controller achieves, despite its simplicity, is substantial. It turns hallucination detection from a passive observation (``this response might be risky'') into an active intervention (``let's try again'' or ``let's not answer''). The RAG pipeline becomes self-corrective at inference time, and it does so through a mechanism that is transparent enough to audit and explain.
+There is a lot to be gained from the controller, despite its simple nature. This shifts hallucination detection from a passive observation (``this response might be risky'') into an active intervention (``let's try again'' or ``let's not answer''). The RAG pipeline is self-corrective at inference time, and it does so in a way that is clear enough to audit and explain.

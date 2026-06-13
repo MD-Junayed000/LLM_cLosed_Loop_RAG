@@ -21,13 +21,13 @@ IAV alone is actually the single strongest branch in our ablation—it consisten
 
 \subsection{Unconstrained Fusion Search}
 
-We experimented with letting the fusion weight collapse freely during optimization. The risk is overfitting: if the search pushes $w$ all the way to 0 or 1 on a particular validation fold, you effectively lose one of the two signals. The system degrades to single-branch behavior—exactly what we are trying to avoid.
+We experimented with letting the fusion weight collapse freely during optimization. The risk is overfitting: if the search pushes $w$ all the way to 0 or 1 on a particular validation fold, you effectively lose one of the two signals. The system drops into single-branch behaviour, which is just what we want to prevent.
 
 \textbf{Verdict:} constrain or monitor the fusion weight to preserve complementarity.
 
 \subsection{Mean Pooling Across All Tokens}
 
-Instead of taking the last token's activation, what if we average across all generated tokens? We tried this too. The problem is dilution. Not every token position carries the same hallucination-relevant information the earlier tokens in a generated response are often just warming up, contextually. The signal concentrates near the end, where the model has committed to its final claims. Averaging washes this out.
+Instead of using the last token's activation, how about averaging over all created tokens? We tried that also. The problem is dilution.  Not all token positions carry the same hallucination-relevant information. The earliest tokens in a generated answer are often simply warming up, contextually. The signal is concentrated near the conclusion, where the model has committed to its final claims. Average washes it out.
 
 \textbf{Verdict:} last-token pooling wins for autoregressive decoders. The final token has attended to everything that came before—it is the natural summary position.
 
@@ -53,7 +53,7 @@ We did attempt a learned policy,  REINFORCE-style, with the probe scores as stat
 \section{Why the Final Configuration Works Best}
 \label{sec:why_best}
 
-Each design choice in the final system exists because a specific alternative failed. Table~\ref{tab:design_choices} maps the correspondence.
+The final system has each design choice because an earlier option did not work. Reference: Table \ref{tab:design_choices} shows how the choices relate to each other.
 
 \begin{table}[!htb]
 \centering
