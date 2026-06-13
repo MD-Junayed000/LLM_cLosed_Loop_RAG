@@ -1,13 +1,13 @@
 \chapter{Background}
 \label{ch:background}
 
-Before diving into the system design, we need to cover the technical foundations that make our approach possible. This chapter walks through the transformer decoder architecture and where exactly we tap into it (Section~\ref{sec:decoder_arch}), formally defines the two activation signals we rely on (Section~\ref{sec:cev_iav_signals}), explains the theoretical motivation for why those signals might be useful (Section~\ref{sec:why_activations}), and closes with worked examples showing what the probe actually sees in practice (Section~\ref{sec:illustrative_examples}).
+Before we dive into the system architecture we need to cover the technical foundations that make our approach viable. In this chapter, we go through the transformer decoder architecture and where exactly we tap into it (Section~\ref{sec:decoder_arch}), formally define the two activation signals we rely on (Section~\ref{sec:cev_iav_signals}), explain the theoretical motivation for why those signals might be useful (Section~\ref{sec:why_activations}), and close with worked examples showing what the probe actually sees in practice.
 
 %% -------------------------------------------------
 \section{Transformer Decoder Architecture and Hook Capture Points}
 \label{sec:decoder_arch}
 
-All three models we evaluate—LLaMA, Mistral, and Qwen—belong to the same broad family of decoder-only transformers. They process a token sequence $x_{1:t}$ by passing it through $L$ stacked decoder blocks. Each block follows the now-standard pre-normalization recipe. Written compactly, decoder block $\ell$ does two things:
+The three models we consider, LLaMA, Mistral and Qwen, all belong to the same broad family of decoder-only transformers. They process a token sequence $x_{1:t}$ by passing it through $L$ stacked decoder blocks. Each block follows the now-standard pre-normalization recipe. Written compactly, decoder block $\ell$ does two things:
 
 \begin{equation}
     \mathbf{h}_\ell = \mathbf{h}_{\ell-1} + \text{MHA}\bigl(\text{RMSNorm}(\mathbf{h}_{\ell-1})\bigr)
@@ -61,7 +61,7 @@ In practice, we extract both signals from a single mid-depth layer (approximatel
 \begin{figure}[!htb]
     \centering
     \includegraphics[width=0.80\textwidth]{Images/cev_iav.jpeg}
-    \caption[Simplified view of CEV and IAV extraction across decoder blocks.]{Simplified view of CEV and IAV extraction across decoder blocks. Green represents residual-stream CEV features; red represents FFN intermediate IAV features. The diagram is conceptual and omits normalization layers for visual clarity.}
+    \caption[Simplified view of CEV and IAV extraction across decoder blocks.]{Simplified view of CEV and IAV extraction across decoder blocks. Green represents residual-stream CEV features; red represents FFN intermediate IAV features. The diagram is conceptual without normalization layers for visual clarity.}
     \label{fig:cev_iav_overview}
 \end{figure}
 

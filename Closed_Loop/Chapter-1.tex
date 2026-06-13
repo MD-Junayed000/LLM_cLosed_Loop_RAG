@@ -31,11 +31,11 @@ Before describing the full closed-loop system, it is worth explaining the mechan
 \subsection{What Is a Forward Hook?}
 \label{subsec:forward_hook}
 
-At its core, a forward hook is simply a function that gets called whenever a particular neural-network module executes. When triggered, the hook receives whatever the module produced (or consumed) and can store a copy for later analysis. Critically, the hook does not interfere with the forward pass—it just watches.
+Basically, a forward hook is a function that gets called whenever a particular module of a neural-network runs. When triggered the hook receives what the module produced (or consumed) and can save a copy for later analysis. Importantly, the hook does not interfere with the forward pass, it just observes.
 
-In our setting, hooks are attached \emph{passively}. They record detached copies of activation tensors during inference and never modify the model's output, its decoding strategy, or its learned parameters. This passive observation is what makes the approach non-invasive: the language model continues to behave exactly as it would without the hooks.
+Hooks in our setting are added \emph{passively}. They store separate copies of activation tensors during inference, and do not change the model’s output, decoding strategy, or learned parameters. This passive observation is what makes the approach non-intrusive: the language model continues to execute exactly as it would without the hooks.
 
-Why does this matter? Because it means we can inspect what the model is ``thinking'' internally at any layer, for any sublayer computation—while it processes retrieved context and produces its answer. We are not limited to the final generated text or the output token probabilities; we can look deeper.
+Why is this important?? Because it means we can inspect what the model is ``thinking'' internally at any layer, for any sublayer computation—while it processes retrieved context and produces its answer. We are not limited to the final generated text or the output token probabilities; we can look deeper.
 
 \begin{figure}[!htb]
     \centering
